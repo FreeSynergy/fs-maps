@@ -218,14 +218,12 @@ impl TileCache {
             g.stats.misses += 1;
             return None;
         };
-        if let Some(ttl) = ttl {
-            if now.saturating_sub(e.stored_at) > ttl.as_secs() {
-                g.remove(&key);
-                let _ = fs::remove_file(&path);
-                g.stats.expired += 1;
-                g.stats.misses += 1;
-                return None;
-            }
+        if ttl.is_some_and(|ttl| now.saturating_sub(e.stored_at) > ttl.as_secs()) {
+            g.remove(&key);
+            let _ = fs::remove_file(&path);
+            g.stats.expired += 1;
+            g.stats.misses += 1;
+            return None;
         }
         match fs::read(&path) {
             Ok(mut data) if data.len() >= HEADER => {

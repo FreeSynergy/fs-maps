@@ -166,10 +166,8 @@ pub fn feature_from_place(obj: &StoredObject) -> Result<Value> {
     if props.is_null() {
         *props = Value::Object(Map::new());
     }
-    if let Some(p) = props.as_object_mut() {
-        if feature_name(p).is_none() {
-            p.insert("name".into(), Value::String(obj.envelope.name.clone()));
-        }
+    if let Some(p) = props.as_object_mut().filter(|p| feature_name(p).is_none()) {
+        p.insert("name".into(), Value::String(obj.envelope.name.clone()));
     }
     Ok(f)
 }
