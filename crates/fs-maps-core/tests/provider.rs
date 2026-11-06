@@ -75,7 +75,7 @@ async fn the_store_backed_provider_reports_what_it_can() {
     }
     assert_eq!(
         caps.why_not("place.subscribe").unwrap().reason(),
-        "not built yet; it is possible"
+        "a borrowed repository has no live feed; StorePlaces has one"
     );
 }
 

@@ -45,8 +45,19 @@ impl Places for PlaceRepository<'_> {
     }
 }
 
-/// The store-backed provider offers every method, except the live feed, which is not built yet.
-pub(super) fn capabilities() -> Capabilities {
+/// A repository alone offers every method but the live feed: it borrows its store and lives only as
+/// long as one call, so nobody could stay subscribed. [`StorePlaces`](super::StorePlaces) has it.
+fn capabilities() -> Capabilities {
+    let mut caps = offered();
+    caps.unsupported(
+        "place.subscribe",
+        "a borrowed repository has no live feed; StorePlaces has one",
+    );
+    caps
+}
+
+/// Everything a store-backed provider offers, besides the feed.
+pub(super) fn offered() -> Capabilities {
     let mut caps = Capabilities::new("fs-maps");
     for id in [
         "place.create",
@@ -57,6 +68,5 @@ pub(super) fn capabilities() -> Capabilities {
     ] {
         caps.supported(id);
     }
-    caps.unsupported("place.subscribe", "not built yet; it is possible");
     caps
 }

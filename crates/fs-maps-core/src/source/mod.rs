@@ -6,7 +6,9 @@
 mod fallback;
 mod file;
 mod http;
+mod lazy;
 mod memory;
+mod none;
 mod pmt;
 mod policy;
 mod tile_source;
@@ -14,5 +16,7 @@ mod tile_source;
 pub use fallback::FallbackSource;
 pub use file::PmtilesFileSource;
 pub use http::PmtilesHttpSource;
+pub use lazy::LazyHttpSource;
 pub use memory::MemorySource;
+pub use none::NoSource;
 pub use tile_source::{SourceInfo, TileSource};
