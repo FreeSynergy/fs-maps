@@ -26,7 +26,7 @@ pub async fn store_places() -> Arc<StorePlaces> {
     Arc::new(StorePlaces::new(store, ME))
 }
 
-/// Both interfaces, connected to the one socket as a consumer would.
+/// Both interfaces, reached from the one socket as a consumer would.
 #[derive(Clone)]
 pub struct Consumer {
     pub places: places::Client,
@@ -51,17 +51,18 @@ pub async fn serving<F, Fut>(
             let root = MapsServer::new(provider, feed, tiles).into_client();
             let bound = bind_socket(&path).await.unwrap();
             let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
-            let serving = tokio::task::spawn_local(serve(bound, root, async {
+            let serving = tokio::task::spawn_local(serve(bound, root.client, async {
                 let _ = stopped.await;
             }));
-            let first = connect::<places::Client>(&path).await.unwrap();
-            let second = connect::<tile_source::Client>(&path).await.unwrap();
+            let connection = connect::<places::Client>(&path).await.unwrap();
+            let answer = connection.client.tiles_request().send().promise.await;
+            let tiles = answer.unwrap().get().unwrap().get_source().unwrap();
             test(Consumer {
-                places: first.client.clone(),
-                tiles: second.client.clone(),
+                places: connection.client.clone(),
+                tiles,
             })
             .await;
-            drop((first, second));
+            drop(connection);
             let _ = stop.send(());
             serving.await.unwrap().unwrap();
         })

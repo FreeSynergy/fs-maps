@@ -111,6 +111,7 @@ async fn find_by_name_ignores_case_and_sees_every_name() {
         let munich = create_text(&p, text).await;
         create(&p, "Paris", 2.35, 48.85).await;
         assert_eq!(named_all(&p, "BERL").await, [(berlin, "Berlin".into())]);
+        assert_eq!(named_all(&p, "  berl ").await, [(berlin, "Berlin".into())], "trimmed");
         assert_eq!(named_all(&p, "münch").await, [(munich, "Munich".into())]);
         assert!(named_all(&p, "100%").await.is_empty(), "% is no wildcard");
         assert!(named_all(&p, "_erlin").await.is_empty(), "_ is no wildcard");

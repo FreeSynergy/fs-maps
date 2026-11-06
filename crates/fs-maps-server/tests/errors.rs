@@ -77,6 +77,7 @@ async fn a_missing_value_or_broken_cursor_is_an_invalid_request() {
             refused(p.find_by_name_request().send().promise.await),
             wrong
         );
+        assert_eq!(refused(p.subscribe_request().send().promise.await), wrong);
         let mut blank = p.find_by_name_request();
         blank.get().set_term("  ");
         assert_eq!(refused(blank.send().promise.await), wrong);

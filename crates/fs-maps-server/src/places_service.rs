@@ -1,25 +1,53 @@
-//! `Places` interface: every method of the contract, each one call of the provider.
+//! `Places` interface, the root of the program: every method of the contract, each one call of the
+//! provider.
 //!
-//! Pattern: Adapter — wire request in, `Places` call, wire response out. What a provider cannot do
-//! arrives as its explicit `Unsupported` and leaves as a typed problem.
+//! Pattern: Adapter + Factory — wire request in, `Places` call, wire response out; `tiles` hands out
+//! the `TileSource` capability. What a provider cannot do arrives as its explicit `Unsupported` and
+//! leaves as a typed problem. [`MapsServer`] is what a program serves; it depends on the traits,
+//! never on `StorePlaces` (ADR 0043).
 
 use std::rc::Rc;
 use std::sync::Arc;
 
+use capnp_rpc::new_client;
 use fs_interfaces::Unsupported;
-use fs_interfaces::places_capnp::places;
-use fs_interfaces::rpc::{read_object_id, unsupported};
-use fs_maps_core::{Paging, PlaceFeed, Places};
+use fs_interfaces::places_capnp::{places, tile_source};
+use fs_interfaces::rpc::{invalid_request, read_object_id, unsupported};
+use fs_maps_core::{Paging, PlaceFeed, Places, TileSource};
 
 use crate::errors::rpc_error;
 use crate::feed::subscribe;
+use crate::tiles_service::TilesImpl;
 use crate::wire::{CONTRACT_VERSION, read_area, read_feature, read_term, write_page, write_place};
 
 const SUBSCRIBE: &str = "place.subscribe";
 
-pub(crate) struct PlacesImpl {
-    pub(crate) places: Arc<dyn Places>,
-    pub(crate) feed: Arc<dyn PlaceFeed>,
+/// The root capability of the maps program.
+pub struct MapsServer {
+    places: Arc<dyn Places>,
+    feed: Arc<dyn PlaceFeed>,
+    tiles: tile_source::Client,
+}
+
+impl MapsServer {
+    /// Serve this provider and this source of tiles. Must run on a `LocalSet`.
+    pub fn new(
+        places: Arc<dyn Places>,
+        feed: Arc<dyn PlaceFeed>,
+        tiles: Arc<dyn TileSource>,
+    ) -> Self {
+        Self {
+            places,
+            feed,
+            tiles: new_client(TilesImpl { source: tiles }),
+        }
+    }
+
+    /// The capability to hand to `fs_interfaces::rpc::serve`.
+    #[must_use]
+    pub fn into_client(self) -> places::Client {
+        new_client(self)
+    }
 }
 
 type Done = Result<(), capnp::Error>;
@@ -30,7 +58,7 @@ const WHOLE_LIST: Paging = Paging {
     offset: 0,
 };
 
-impl places::Server for PlacesImpl {
+impl places::Server for MapsServer {
     async fn support_report(
         self: Rc<Self>,
         _: places::SupportReportParams,
@@ -139,9 +167,22 @@ impl places::Server for PlacesImpl {
                 .unwrap_or_else(|| Unsupported::new(SUBSCRIBE, "this provider does not offer it"));
             return Err(unsupported(&why));
         }
-        let listener = params.get()?.get_listener()?;
+        let p = params.get()?;
+        if !p.has_listener() {
+            return Err(invalid_request("listener is missing"));
+        }
+        let listener = p.get_listener()?;
         let subscription = subscribe(&self.feed, self.places.clone(), listener);
         results.get().set_subscription(subscription);
+        Ok(())
+    }
+
+    async fn tiles(
+        self: Rc<Self>,
+        _: places::TilesParams,
+        mut results: places::TilesResults,
+    ) -> Done {
+        results.get().set_source(self.tiles.clone());
         Ok(())
     }
 }

@@ -54,7 +54,8 @@ pub(crate) fn read_feature(text: capnp::text::Reader<'_>) -> capnp::Result<Value
 /// Read the search term. An empty one would match every place, which `list` is for.
 pub(crate) fn read_term(text: capnp::text::Reader<'_>) -> capnp::Result<&str> {
     let term = text.to_str().map_err(|e| invalid_request(e.to_string()))?;
-    if term.trim().is_empty() {
+    let term = term.trim();
+    if term.is_empty() {
         return Err(invalid_request("term is empty"));
     }
     Ok(term)

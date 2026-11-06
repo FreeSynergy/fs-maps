@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
-use fs_interfaces::places_capnp::{places, tile_source};
+use fs_interfaces::places_capnp::places;
 use fs_interfaces::rpc::{Problem, connect};
 use fs_maps_core::testutil::{RangeServer, write_fixture};
 
@@ -62,8 +62,14 @@ async fn stored_names(socket: &Path) -> Vec<String> {
 }
 
 async fn tile(socket: &Path, z: u8) -> capnp::Result<Option<Vec<u8>>> {
-    let connection = connect::<tile_source::Client>(socket).await.unwrap();
-    let mut req = connection.client.tile_request();
+    let connection = connect::<places::Client>(socket).await.unwrap();
+    let tiles = connection
+        .client
+        .tiles_request()
+        .send()
+        .pipeline
+        .get_source();
+    let mut req = tiles.tile_request();
     req.get().set_z(z);
     let answer = req.send().promise.await?;
     let r = answer.get()?;

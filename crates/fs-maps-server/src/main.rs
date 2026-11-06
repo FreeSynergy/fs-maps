@@ -1,4 +1,4 @@
-//! `fs-maps-server [--socket PATH] [--data DIR] [--actor IRI]`; the tiles come from the environment
+//! `fs-maps-server [--socket PATH] [--data DIR] [--actor IRI] [--instance DOMAIN]`; the tiles come from the environment
 //! (`FS_MAPS_TILES`, `FS_MAPS_TILES_URL`, see `TileConfig::from_env`). No source: tiles answer
 //! `Unsupported`.
 //!
@@ -24,9 +24,15 @@ fn main() {
             .await
             .map_err(std::io::Error::other)?;
         let store: Arc<dyn Store> = Arc::new(store);
-        let places = Arc::new(StorePlaces::new(store, options.actor.clone()));
+        let places = StorePlaces::new(store, options.actor.clone());
+        let places = Arc::new(match &options.instance {
+            Some(host) => places.with_instance(host.as_str()),
+            None => places,
+        });
         let tiles = open_tiles(&tiles).await.map_err(std::io::Error::other)?;
-        Ok(MapsServer::new(places.clone(), places, tiles).into_client())
+        Ok(MapsServer::new(places.clone(), places, tiles)
+            .into_client()
+            .client)
     });
     if let Err(e) = served {
         eprintln!("fs-maps-server: {e}");
