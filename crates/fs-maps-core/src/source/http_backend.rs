@@ -91,3 +91,28 @@ impl AsyncBackend for HttpBackend {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::{RangeServer, write_fixture};
+
+    #[tokio::test]
+    async fn a_body_longer_than_asked_is_not_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.pmtiles");
+        write_fixture(&file, 1).await.unwrap();
+        let server = RangeServer::start(&file).await.unwrap();
+        let backend = HttpBackend {
+            client: http_client("FreeSynergy-Maps-test/0.2").unwrap(),
+            url: Url::parse(&server.url).unwrap(),
+        };
+        assert_eq!(backend.read(0, 100).await.unwrap().bytes.len(), 100);
+        server.pad_answers(1);
+        let e = backend.read(0, 100).await.unwrap_err();
+        assert!(
+            matches!(e, PmtError::UnexpectedNumberOfBytesReturned(100, 101)),
+            "{e:?}"
+        );
+    }
+}
