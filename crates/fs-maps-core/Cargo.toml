@@ -15,7 +15,7 @@ thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 url = "2"
-fs-store = { path = "/srv/FreeSynergy/fs-store/crates/fs-store" }
+fs-store = { git = "https://github.com/FreeSynergy/fs-store", tag = "v0.2.0" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
