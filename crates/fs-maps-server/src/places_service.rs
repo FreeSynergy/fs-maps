@@ -10,19 +10,16 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use capnp_rpc::new_client;
-use fs_interfaces::Unsupported;
 use fs_interfaces::places_capnp::{places, tile_source};
-use fs_interfaces::rpc::{check_answer, invalid_request, read_object_id, run_to_end, unsupported};
+use fs_interfaces::rpc::{check_answer, invalid_request, read_object_id, run_to_end};
 use fs_maps_core::{Paging, PlaceFeed, Places, TileSource};
 
 use crate::errors::rpc_error;
-use crate::feed::subscribe;
+use crate::feed::{offered, subscribe};
 use crate::tiles_service::TilesImpl;
 use crate::wire::{
     CONTRACT_VERSION, read_area, read_feature, read_term, weight, write_page, write_place,
 };
-
-const SUBSCRIBE: &str = "place.subscribe";
 
 /// The root capability of the maps program.
 pub struct MapsServer {
@@ -54,7 +51,7 @@ impl MapsServer {
 
 type Done = Result<(), capnp::Error>;
 
-/// A page of the contract is cut by `Page`, which needs the whole ordered list (`DESIGN.md`).
+/// `Page` cuts a page out of the whole ordered list (`DESIGN.md`).
 const WHOLE_LIST: Paging = Paging {
     limit: None,
     offset: 0,
@@ -168,19 +165,12 @@ impl places::Server for MapsServer {
         )
     }
 
-    /// A provider without a feed says so in its report; the capability would otherwise stay silent.
     async fn subscribe(
         self: Rc<Self>,
         params: places::SubscribeParams,
         mut results: places::SubscribeResults,
     ) -> Done {
-        let report = self.places.capabilities();
-        if !report.is_supported(SUBSCRIBE) {
-            let why = report
-                .why_not(SUBSCRIBE)
-                .unwrap_or_else(|| Unsupported::new(SUBSCRIBE, "this provider does not offer it"));
-            return Err(unsupported(&why));
-        }
+        offered(self.places.as_ref())?;
         let p = params.get()?;
         if !p.has_listener() {
             return Err(invalid_request("listener is missing"));

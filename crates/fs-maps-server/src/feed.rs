@@ -5,8 +5,9 @@
 
 use std::sync::Arc;
 
+use fs_interfaces::Unsupported;
 use fs_interfaces::common_capnp::{change_listener, subscription};
-use fs_interfaces::rpc::{ChangeSender, Notice, change_channel, forward};
+use fs_interfaces::rpc::{ChangeSender, Notice, change_channel, forward, unsupported};
 use fs_maps_core::{PlaceChange, PlaceFeed, PlaceListener, Places};
 
 struct ToChannel(ChangeSender<PlaceChange>);
@@ -15,6 +16,20 @@ impl PlaceListener for ToChannel {
     fn changed(&self, change: &PlaceChange) {
         self.0.send(*change);
     }
+}
+
+const SUBSCRIBE: &str = "place.subscribe";
+
+/// A provider without a feed says so in its report; the capability would otherwise stay silent.
+pub(crate) fn offered(places: &dyn Places) -> capnp::Result<()> {
+    let report = places.capabilities();
+    if report.is_supported(SUBSCRIBE) {
+        return Ok(());
+    }
+    let why = report
+        .why_not(SUBSCRIBE)
+        .unwrap_or_else(|| Unsupported::new(SUBSCRIBE, "this provider does not offer it"));
+    Err(unsupported(&why))
 }
 
 /// Subscribe `listener` until the returned capability is dropped.
