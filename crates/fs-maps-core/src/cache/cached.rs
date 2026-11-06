@@ -55,4 +55,7 @@ impl<S: TileSource> TileSource for CachedSource<S> {
     fn info(&self) -> Option<SourceInfo> {
         self.inner.info()
     }
+    fn capabilities(&self) -> fs_interfaces::Capabilities {
+        self.inner.capabilities()
+    }
 }

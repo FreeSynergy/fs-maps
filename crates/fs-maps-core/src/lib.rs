@@ -43,6 +43,8 @@ pub mod tile;
 
 pub use cache::{CacheConfig, CacheStats, CachedSource, TileCache};
 pub use error::{Error, Result};
+pub use fs_interfaces::{Capabilities, Unsupported};
+pub use places::{Area, Paging, PlaceRepository, Places, StoreView};
 pub use region::{Estimate, Progress, ProgressObserver, RegionDownload, RegionReport, RegionSpec};
 pub use source::{
     FallbackSource, MemorySource, PmtilesFileSource, PmtilesHttpSource, SourceInfo, TileSource,

@@ -1,10 +1,13 @@
 //! The [`TileSource`] interface.
 //!
 //! Pattern: Strategy — callers (cache, region download, UI) depend on this trait only, so the
-//! origin of tiles (remote archive, local file, memory, chain) can change freely.
+//! origin of tiles (remote archive, local file, memory, chain) can change freely. It is the
+//! provider interface `TileSource` of `places.capnp`; its one capability, `tile.read`, is what
+//! `get_tile` does, so every source reports it (ADR 0045).
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use fs_interfaces::Capabilities;
 
 use crate::error::Result;
 use crate::tile::BBox;
@@ -30,5 +33,12 @@ pub trait TileSource: Send + Sync {
     /// Zoom range / bounds, when known.
     fn info(&self) -> Option<SourceInfo> {
         None
+    }
+    /// What this source can do: `tile.read`. A source that cannot serve tiles overrides this and
+    /// says why.
+    fn capabilities(&self) -> Capabilities {
+        let mut caps = Capabilities::new(format!("tiles:{}", self.id()));
+        caps.supported("tile.read");
+        caps
     }
 }

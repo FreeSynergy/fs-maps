@@ -69,6 +69,12 @@ pub enum Error {
     /// JSON (de)serialisation error.
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
+    /// No place with this id.
+    #[error("place {0} not found")]
+    NotFound(fs_store::ObjectId),
+    /// The explicit "not possible" of a provider (ADR 0045).
+    #[error(transparent)]
+    Unsupported(#[from] fs_interfaces::Unsupported),
     /// Error from the object store.
     #[error("store: {0}")]
     Store(#[from] fs_store::Error),

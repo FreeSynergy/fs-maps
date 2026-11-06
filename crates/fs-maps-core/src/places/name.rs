@@ -24,3 +24,22 @@ pub fn feature_name(props: &Map<String, Value>) -> Option<String> {
         })
         .or_else(|| s("title"))
 }
+
+/// Every name of the feature: `name`, every `name:*` (sorted), `title`; without duplicates. They
+/// are what `findByName` searches.
+pub fn feature_names(props: &Map<String, Value>) -> Vec<String> {
+    let mut keys: Vec<&String> = props
+        .keys()
+        .filter(|k| *k == "name" || k.starts_with("name:") || *k == "title")
+        .collect();
+    keys.sort();
+    let mut out: Vec<String> = vec![];
+    for k in keys {
+        if let Some(v) = props[k].as_str().map(str::trim).filter(|v| !v.is_empty())
+            && !out.iter().any(|o| o == v)
+        {
+            out.push(v.to_owned());
+        }
+    }
+    out
+}

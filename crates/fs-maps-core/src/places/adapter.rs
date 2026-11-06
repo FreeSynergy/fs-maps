@@ -3,13 +3,16 @@
 //! Pattern: Adapter — the foreign GeoJSON model on one side, `StoredObject` on the other. The
 //! stored `content` is the Feature itself (`application/geo+json`, ADR 0020/0032); the envelope
 //! `name` comes from `properties.name` (fallbacks in `name.rs`). Index fields: `geometry_type`,
-//! `bbox` (`minlon,minlat,maxlon,maxlat`) and, for points, `geo` (an RFC 5870 URI).
+//! `bbox` (`minlon,minlat,maxlon,maxlat`), the sortable edge keys of `bounds` (for `within`),
+//! every name in `name` (for `findByName`) and, for points, `geo` (an RFC 5870 URI).
 
 use fs_store::{Envelope, StoredObject};
 use serde_json::{Map, Value};
 
+use super::bounds::bbox_index;
 use super::geometry::{feature_bbox, geometry_positions};
-use super::name::feature_name;
+use super::name::{feature_name, feature_names};
+use super::search::NAME_KEY;
 use crate::error::{Error, Result};
 use crate::geouri::GeoUri;
 
@@ -51,6 +54,7 @@ pub fn place_from_feature(feature: &Value, attributed_to: Option<&str>) -> Resul
                     b.min_lon, b.min_lat, b.max_lon, b.max_lat
                 )],
             );
+            index.extend(bbox_index(&b));
         }
         if t == "Point" {
             let (lon, lat) = pts[0];
@@ -62,6 +66,7 @@ pub fn place_from_feature(feature: &Value, attributed_to: Option<&str>) -> Resul
     {
         return gj("feature has no geometry member (use null for unlocated)");
     }
+    index.insert(NAME_KEY.into(), feature_names(&props));
     let mut env = Envelope::new(PLACE_TYPE, name);
     env.attributed_to = attributed_to.map(str::to_owned);
     let mut obj = StoredObject::new(env, GEOJSON_MEDIA_TYPE, feature.clone());

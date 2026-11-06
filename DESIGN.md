@@ -7,7 +7,7 @@ Evidence for all policy decisions: `RESEARCH.md` (2026-11-05). Decisions: ADR 00
 
 ## State
 
-Version 0.1.0 (local only, never pushed). ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests: the 29 of before + 1 policy URL test).
+Version 0.1.0 (first tag). `Places` is the provider of `places.capnp` (ADR 0045, 0050): trait with every method, `Unsupported` defaults, `Capabilities`; `TileSource` also reports `Capabilities`. Earlier: ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests before the provider work, all unchanged; 46 now).
 
 | Area | State |
 |---|---|
@@ -19,8 +19,14 @@ Version 0.1.0 (local only, never pushed). ADR 0043 refactor done: no file over 3
 | `CachedSource<S>` wrapper | done |
 | `RegionDownload` (Facade; `DownloadCommand`, `TilePlan` iterator, `ProgressObserver`): exact tile count + sampled size estimate before download, tile limit (200 000), progress + cancel callback, writes a **PMTiles v3 package** (MVT, gzip, Hilbert order, bounds/metadata/attribution) via the `pmtiles` writer | done |
 | `places`: `PlaceRepository` over `ObjectRepository` + GeoJSON `Feature` <-> `fs-store` `StoredObject` (type `Place`, `application/geo+json`, name from `properties.name`/`name:en`/`name:*`/`title`, index `geometry_type`, `bbox`, `geo`) | done, tested incl. real `TursoStore` |
+| Trait `Places` (`places/contract.rs`): required `capabilities`, `get`, `list`; defaults answering `Unsupported`: `create`, `update`, `delete`, `within`, `find_by_name`. `PlaceRepository` implements all; it reports every id of the schema except `place.subscribe` ("not built yet; it is possible") | done |
+| `PlaceRepository` over `ObjectRepository` + `ObjectQuery` (still borrows its store: `new(&store, actor)`; behind an `Arc<dyn Store>` use `StoreView::new(&*store)`); create sets context `places` and IRI `https://<instance>/places/<id>` (`with_instance`); update keeps id, `published`, IRI, attribution | done |
+| `within(Area, Paging)`: **one store query**; the four edges of the geometry's bounding box are index keys (`lon_min`, `lon_max`, `lat_min`, `lat_max`: fixed-width decimals of 1e-7 degrees so the store's binary text order is numeric order), paged by the store. Overlap = bounding box of the geometry meets the area, edges touching count; points, lines, polygons alike; no geometry = never found | done, tested |
+| Antimeridian: an area with `west > east` is `[west,180] + [-180,east]`; one OR-group (`lon_max >= west` or `lon_min <= east`), still one query. A geometry that itself crosses 180 has a bounding box over all longitudes (RFC 7946 §5), so it is found from both sides | done, tested |
+| `find_by_name`: one store query, `Contains` (case-insensitive, normalised) on the envelope name or on the index `name` (every `name`, `name:*`, `title`) | done, tested |
+| `TileSource::capabilities()` (provided: `tile.read`; `CachedSource` forwards its inner source) | done |
 | `geouri`: RFC 5870 `geo:` parse/format (crs=wgs84, `u=`, extra params, pole/antimeridian normalisation) | done |
-| Example `fetch_tiles` | done (loopback fixture by default) |
+| Examples `fetch_tiles` (loopback fixture by default), `places` | done |
 | GUI, MVT decoding/rendering, styles, geocoding/search, routing | **not started** (see RESEARCH.md section 5) |
 
 ## Structure and pattern map (ADR 0043)
@@ -44,6 +50,10 @@ declare and re-export, every module doc has a `Pattern:` line. Callers depend on
 | `region/plan.rs` | Iterator | tiles in Hilbert (TileID) order, as the clustered PMTiles archive needs |
 | `region/observer.rs` | Observer | `ProgressObserver` (closures work too); returning `false` cancels |
 | `region/estimate.rs` | Strategy consumer | pure function over a plan and a `dyn TileSource` |
+| `places/contract.rs` | Repository (interface) + Null Object | `Places`: what callers depend on; `Unsupported` defaults |
+| `places/{write,search,book}.rs` | Template method / Builder consumer / Facade | write flow; one `Query` per search; thin trait impl + capability report |
+| `places/bounds.rs` | Specification | `Area` turns itself into store conditions; edge keys of a box |
+| `places/store_view.rs` | Adapter | `&dyn Store` as the two narrow traits |
 | `places/adapter.rs` | Adapter | GeoJSON `Feature` <-> `StoredObject` (type `Place`) |
 | `places/repository.rs` | Repository over Store | `PlaceRepository` depends on `fs_store::traits::ObjectRepository` only |
 | `places/{geometry,name}.rs` | Interpreter-style recursion / Strategy | geometry validation; name fallback order |
@@ -86,7 +96,11 @@ file mtime so the order survives restarts). One process owns a cache dir (no cro
 * Which PMTiles source FreeSynergy hosts by default (recommendation: own extract of a Protomaps/Shortbread build, ODbL
   attribution). Protomaps asks not to hotlink their daily builds; no explicit permission to use that bucket as a tile
   server was found.
-* Antimeridian-crossing bboxes (split in two), zoom > 22, `crs` other than wgs84 are unsupported.
+* **Question to the owner (provisional):** the overlap rule. Today a place matches `within` when the bounding box of its geometry meets the area (an L-shaped polygon matches a box in its empty notch; a geometry over the antimeridian matches everywhere along the latitude band). Exact geometry tests would need a geometry library (ADR 0015) and could not run in the store.
+* **Question to the owner (provisional):** index precision 1e-7 degrees (about 1 cm), rounded outwards, so a place at most 1e-7 degrees outside an area can still match. Raising it would need a wider key.
+* **Question to the owner:** `place.subscribe`, and the cursor form: the Rust API pages with `Paging { limit, offset }`; the wire `Cursor` will wrap the offset (offset paging costs O(offset) in the store).
+* Tile ranges (`region`) still do not cross the antimeridian (`tile::BBox`, unchanged); the search `Area` is a separate type that does.
+* Zoom > 22 and `crs` other than wgs84 are unsupported.
 * Places: `Place` objects are plain GeoJSON features; AS2 `latitude/longitude/radius` are not mirrored (envelope has no
   free fields); JSON-FG is not handled yet (GeoJSON subset only). Geometry validation checks types and WGS84 ranges,
   not ring closure/winding.
@@ -94,5 +108,5 @@ file mtime so the order survives restarts). One process owns a cache dir (no cro
 
 ## Tests
 
-`cargo test`: tests by feature in `tests/` (`cache`, `cache_model`, `region`, `source`, `places`, `http_fixture`), unit tests next to `tile`, `geouri`, `source/policy`; property tests (cache limit + LRU model, `geo:` roundtrip), integration test
+`cargo test`: tests by feature in `tests/` (`cache`, `cache_model`, `region`, `source`, `places`, `places_crud`, `places_find`, `provider`, `http_fixture`), unit tests next to `tile`, `geouri`, `source/policy`; property tests (cache limit + LRU model, `geo:` roundtrip), integration test
 `tests/http_fixture.rs` (loopback range server, cache, region download, offline chain). Nothing contacts a public server.
