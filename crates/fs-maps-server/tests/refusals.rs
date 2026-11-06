@@ -90,10 +90,20 @@ fn a_cache_others_can_reach_is_refused() {
     let cache = dir.path().join("cache");
     std::fs::create_dir(&cache).unwrap();
     std::fs::set_permissions(&cache, PermissionsExt::from_mode(0o755)).unwrap();
-    let status = program(&socket, &data)
+    let mut child = program(&socket, &data)
         .env("FS_MAPS_TILES_URL", "https://example.invalid/a.pmtiles")
         .env("FS_MAPS_CACHE", &cache)
-        .status()
+        .spawn()
         .unwrap();
-    assert_eq!(status.code(), Some(1));
+    // A server that wrongly starts never exits: that must fail here, not hang.
+    for _ in 0..400 {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert_eq!(status.code(), Some(1));
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    child.kill().unwrap();
+    child.wait().unwrap();
+    panic!("it started with a cache others can reach");
 }

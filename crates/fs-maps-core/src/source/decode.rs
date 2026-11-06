@@ -46,3 +46,45 @@ pub(super) async fn bounded(
         .await
         .map_err(io::Error::other)?
 }
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use super::*;
+
+    /// Endless zeros that count what was taken.
+    struct Endless<'a>(&'a Cell<usize>);
+
+    impl Read for Endless<'_> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let n = buf.len().min(4096);
+            buf[..n].fill(0);
+            self.0.set(self.0.get() + n);
+            if self.0.get() > 1 << 24 {
+                return Ok(0); // the limit is gone: end it, the assertion below tells
+            }
+            Ok(n)
+        }
+    }
+
+    #[test]
+    fn reading_stops_just_past_the_limit() {
+        let taken = Cell::new(0);
+        assert_eq!(up_to(Endless(&taken), 1000).unwrap(), None);
+        assert!(taken.get() <= 64 * 1024, "took {}", taken.get());
+    }
+
+    #[test]
+    fn the_limit_itself_passes() {
+        let plain = Bytes::from_static(b"12345");
+        let got = decode(Compression::None, &plain, 5).unwrap();
+        assert_eq!(got.as_deref(), Some(&b"12345"[..]));
+        assert_eq!(decode(Compression::None, &plain, 4).unwrap(), None);
+        assert_eq!(
+            up_to(&b"12345"[..], 5).unwrap().as_deref(),
+            Some(&b"12345"[..])
+        );
+        assert_eq!(up_to(&b"12345"[..], 4).unwrap(), None);
+    }
+}

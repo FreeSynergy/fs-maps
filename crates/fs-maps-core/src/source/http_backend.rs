@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use bytes::BytesMut;
-use pmtiles::reqwest::header::{CONTENT_LENGTH, ETAG, HeaderValue, LAST_MODIFIED, RANGE};
+use pmtiles::reqwest::header::{ETAG, HeaderValue, LAST_MODIFIED, RANGE};
 use pmtiles::reqwest::{Client, Method, Request, StatusCode, Url, redirect};
 use pmtiles::{AsyncBackend, BackendResponse, PmtError, PmtResult};
 
@@ -77,17 +77,11 @@ impl AsyncBackend for HttpBackend {
             .or_else(|| headers.get(LAST_MODIFIED))
             .and_then(|v| v.to_str().ok())
             .map(str::to_owned);
-        let claimed = headers
-            .get(CONTENT_LENGTH)
-            .and_then(|v| v.to_str().ok()?.parse::<u64>().ok());
-        let too_much = |got: u64| PmtError::UnexpectedNumberOfBytesReturned(length, got as usize);
-        if let Some(claimed) = claimed.filter(|c| *c > length as u64) {
-            return Err(too_much(claimed));
-        }
         let mut body = BytesMut::new();
         while let Some(chunk) = response.chunk().await.map_err(clean)? {
             if body.len() + chunk.len() > length {
-                return Err(too_much((body.len() + chunk.len()) as u64));
+                let got = body.len() + chunk.len();
+                return Err(PmtError::UnexpectedNumberOfBytesReturned(length, got));
             }
             body.extend_from_slice(&chunk);
         }

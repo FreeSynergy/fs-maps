@@ -1,7 +1,7 @@
 //! A remote archive on the loopback: replaced, lying, silent.
 
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use fs_maps_core::testutil::{RangeServer, write_fixture, write_labelled};
@@ -140,4 +140,27 @@ async fn a_failed_open_is_remembered_and_then_tried_again() {
         source.get_tile(0, 0, 0).await.unwrap().unwrap(),
         labelled("R", 0, 0, 0)
     );
+}
+
+/// A source that takes any number, as a foreign one may.
+struct Trusting(AtomicUsize);
+
+#[async_trait::async_trait]
+impl TileSource for Trusting {
+    fn id(&self) -> String {
+        "trusting".into()
+    }
+    async fn get_tile(&self, _: u8, _: u32, _: u32) -> fs_maps_core::Result<Option<bytes::Bytes>> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Ok(None)
+    }
+}
+
+#[tokio::test]
+async fn a_chain_asks_nobody_about_a_tile_that_cannot_exist() {
+    let asked = Arc::new(Trusting(AtomicUsize::new(0)));
+    let chain = FallbackSource::new(vec![asked.clone()]);
+    let e = chain.get_tile(1, 2, 0).await.unwrap_err();
+    assert!(matches!(e, Error::InvalidTile { .. }), "{e:?}");
+    assert_eq!(asked.0.load(Ordering::SeqCst), 0);
 }
