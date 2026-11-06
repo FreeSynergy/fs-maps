@@ -1,47 +1,17 @@
-//! `subscribe` over a real socket.
+//! `subscribe` over a real socket: `Created`, `Updated`, `Deleted`, and how a feed ends.
 
 mod common;
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
 
-use capnp_rpc::new_client;
-use common::{create, delete, point, with_server};
-use fs_interfaces::common_capnp::{change, change_listener};
-use fs_interfaces::places_capnp::places;
-use fs_interfaces::rpc::{read_envelope, write_object_id};
-
-#[derive(Clone, Default)]
-struct Seen(Rc<RefCell<Vec<String>>>);
-
-impl change_listener::Server for Seen {
-    async fn change(
-        self: Rc<Self>,
-        params: change_listener::ChangeParams,
-    ) -> Result<(), capnp::Error> {
-        let kind = match params.get()?.get_change()?.which()? {
-            change::Which::Created(e) => format!("created {}", read_envelope(e?)?.name),
-            change::Which::Updated(e) => format!("updated {}", read_envelope(e?)?.name),
-            change::Which::Deleted(_) => "deleted".to_string(),
-        };
-        self.0.borrow_mut().push(kind);
-        Ok(())
-    }
-}
-
-async fn settle() {
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-}
-
-fn watch(places: &places::Client, seen: &Seen) -> impl Future<Output = Subscribed> {
-    let listener: change_listener::Client = new_client(seen.clone());
-    let mut sub = places.subscribe_request();
-    sub.get().set_listener(listener);
-    let sending = sub.send().promise;
-    async move { sending.await.unwrap() }
-}
-
-type Subscribed = capnp::capability::Response<places::subscribe_results::Owned>;
+use async_trait::async_trait;
+use common::seen::{Seen, Told, settle, watch};
+use common::{create, delete, point, serving, store_places, with_server};
+use fs_interfaces::Capabilities;
+use fs_interfaces::rpc::{FEED_ENDED_PROBLEM_TYPE, write_object_id};
+use fs_maps_core::{Error, NoSource, Paging, Places, Result, StorePlaces};
+use fs_store::{ObjectId, StoredObject};
+use serde_json::Value;
 
 #[tokio::test(flavor = "current_thread")]
 async fn subscribers_see_changes_until_they_drop_the_capability() {
@@ -60,19 +30,27 @@ async fn subscribers_see_changes_until_they_drop_the_capability() {
             .get()
             .set_geojson(point("Moved", 13.5, 52.5).as_str());
         update.send().promise.await.unwrap();
+        settle().await;
         delete(&p, id).await;
         settle().await;
-        let expected = ["created Watched", "updated Moved", "deleted"];
-        assert_eq!(*seen.0.borrow(), expected);
-        assert_eq!(*other.0.borrow(), expected);
+        let expected = [
+            Told::Created(id, "Watched".into()),
+            Told::Updated(id, "Moved".into()),
+            Told::Deleted(id),
+        ];
+        assert_eq!(seen.told(), expected);
+        assert_eq!(other.told(), expected);
 
         drop(subscription);
         drop(answer);
         settle().await;
-        create(&p, "Unwatched", 2.3, 48.8).await;
+        let later = create(&p, "Unwatched", 2.3, 48.8).await;
         settle().await;
-        assert_eq!(seen.0.borrow().len(), 3, "still told after the drop");
-        assert_eq!(other.0.borrow().len(), 4, "the other one ended too");
+        assert_eq!(seen.told(), expected, "told after the drop, or told ended");
+        assert_eq!(
+            other.told().last(),
+            Some(&Told::Created(later, "Unwatched".into()))
+        );
         drop(kept);
     })
     .await;
@@ -87,29 +65,71 @@ async fn a_refused_write_is_not_a_change() {
         let mut bad = p.create_request();
         bad.get().set_geojson("{ not json");
         assert!(bad.send().promise.await.is_err());
+        let mut gone = p.delete_request();
+        write_object_id(gone.get().init_id(), ObjectId::new());
+        assert!(gone.send().promise.await.is_err());
         settle().await;
-        assert!(seen.0.borrow().is_empty());
+        assert_eq!(seen.told(), []);
+    })
+    .await;
+}
+
+/// The store-backed provider, whose reads answer as told; everything else goes through.
+struct Reads(Arc<StorePlaces>, fn() -> Result<Option<StoredObject>>);
+
+#[async_trait]
+impl Places for Reads {
+    fn capabilities(&self) -> Capabilities {
+        self.0.capabilities()
+    }
+    async fn get(&self, _: ObjectId) -> Result<Option<StoredObject>> {
+        (self.1)()
+    }
+    async fn list(&self, page: Paging) -> Result<Vec<StoredObject>> {
+        self.0.list(page).await
+    }
+    async fn create(&self, feature: &Value) -> Result<StoredObject> {
+        self.0.create(feature).await
+    }
+    async fn delete(&self, id: ObjectId) -> Result<()> {
+        self.0.delete(id).await
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_read_that_fails_ends_the_feed_and_says_so() {
+    let places = store_places().await;
+    let failing = || Err(Error::Store(fs_store::Error::Backend("disk gone".into())));
+    let provider = Arc::new(Reads(places.clone(), failing));
+    serving(provider, places, Arc::new(NoSource), |maps| async move {
+        let p = maps.places;
+        let seen = Seen::default();
+        let _answer = watch(&p, &seen).await;
+        let id = create(&p, "Not told", 1.0, 1.0).await;
+        settle().await;
+        assert_eq!(
+            seen.told(),
+            [Told::Ended(FEED_ENDED_PROBLEM_TYPE.into(), 410)]
+        );
+        delete(&p, id).await;
+        settle().await;
+        assert_eq!(seen.told().len(), 1, "told after the end");
     })
     .await;
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn an_object_gone_again_only_reports_its_deletion() {
-    with_server(|maps| async move {
+async fn a_place_gone_by_now_is_skipped_and_the_feed_goes_on() {
+    let places = store_places().await;
+    let provider = Arc::new(Reads(places.clone(), || Ok(None)));
+    serving(provider, places, Arc::new(NoSource), |maps| async move {
         let p = maps.places;
         let seen = Seen::default();
         let _answer = watch(&p, &seen).await;
-        let mut ids = Vec::new();
-        for _ in 0..3 {
-            ids.push(create(&p, "Short lived", 1.0, 1.0).await);
-        }
-        for id in ids {
-            delete(&p, id).await;
-        }
+        let id = create(&p, "Gone at once", 1.0, 1.0).await;
+        delete(&p, id).await;
         settle().await;
-        let log = seen.0.borrow();
-        assert_eq!(log.iter().filter(|s| *s == "deleted").count(), 3, "{log:?}");
-        assert_eq!(log.last().map(String::as_str), Some("deleted"));
+        assert_eq!(seen.told(), [Told::Deleted(id)]);
     })
     .await;
 }

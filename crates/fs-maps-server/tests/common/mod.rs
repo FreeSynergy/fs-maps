@@ -2,6 +2,8 @@
 
 #![allow(dead_code)] // each test file uses a different subset
 
+pub mod seen;
+
 use std::future::Future;
 use std::sync::Arc;
 
@@ -76,6 +78,20 @@ where
     serving(provider.clone(), provider, tiles, test).await;
 }
 
+/// The store-backed provider, no tiles, and the store itself for what another writer could leave.
+pub async fn with_store<F, Fut>(test: F)
+where
+    F: FnOnce(Consumer, Arc<dyn Store>) -> Fut,
+    Fut: Future<Output = ()>,
+{
+    let store: Arc<dyn Store> = Arc::new(TursoStore::open_in_memory().await.unwrap());
+    let provider = Arc::new(StorePlaces::new(store.clone(), ME));
+    serving(provider.clone(), provider, Arc::new(NoSource), |maps| {
+        test(maps, store)
+    })
+    .await;
+}
+
 /// The store-backed provider, no tiles configured.
 pub async fn with_server<F, Fut>(test: F)
 where
@@ -112,29 +128,49 @@ pub fn problem(e: &capnp::Error) -> Problem {
     Problem::from_error(e).unwrap_or_else(|| panic!("untyped error: {e}"))
 }
 
-/// What one page holds, as names and the next cursor.
-pub fn page_of(page: place_page::Reader<'_>) -> (Vec<String>, Vec<u8>) {
-    let names = page
+/// Type and status of a failed call; an answer instead of a failure fails the test.
+pub fn refused<T>(answer: capnp::Result<T>) -> (String, u16) {
+    let e = answer.err().expect("expected a refusal");
+    let p = problem(&e);
+    (p.problem_type, p.status)
+}
+
+pub fn is(kind: &str, status: u16) -> (String, u16) {
+    (kind.to_string(), status)
+}
+
+pub const INVALID: &str = "https://freesynergy.net/problems/places/invalid";
+pub const NOT_FOUND: &str = "https://freesynergy.net/problems/places/not-found";
+pub const STORED_DATA: &str = "https://freesynergy.net/problems/places/stored-data-invalid";
+pub const INVALID_REQUEST: &str = "https://freesynergy.net/problems/invalid-request";
+pub const TOO_LARGE: &str = "https://freesynergy.net/problems/too-large";
+
+/// What one page holds, as (id, name), and the next cursor.
+pub fn page_of(page: place_page::Reader<'_>) -> (Vec<(ObjectId, String)>, Vec<u8>) {
+    let items = page
         .get_items()
         .unwrap()
         .iter()
-        .map(|p| envelope_of(p).name)
+        .map(|p| {
+            let e = envelope_of(p);
+            (e.id, e.name)
+        })
         .collect();
     let next = page.get_next().unwrap().get_opaque().unwrap().to_vec();
-    (names, next)
+    (items, next)
 }
 
-/// Page through `list` to the end: all ids, and how many pages it took.
+/// Page through `list` to the end: all ids in the order given, and how many pages it took.
 pub async fn list_all(places: &places::Client) -> (Vec<ObjectId>, usize) {
     let (mut ids, mut pages, mut cursor) = (Vec::new(), 0, Vec::new());
     loop {
         let mut req = places.list_request();
         req.get().init_cursor().set_opaque(&cursor);
         let answer = req.send().promise.await.unwrap();
-        let page = answer.get().unwrap().get_page().unwrap();
-        ids.extend(page.get_items().unwrap().iter().map(|p| envelope_of(p).id));
+        let (items, next) = page_of(answer.get().unwrap().get_page().unwrap());
+        ids.extend(items.into_iter().map(|(id, _)| id));
         pages += 1;
-        cursor = page.get_next().unwrap().get_opaque().unwrap().to_vec();
+        cursor = next;
         if cursor.is_empty() {
             return (ids, pages);
         }

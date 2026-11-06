@@ -31,11 +31,17 @@ pub(crate) fn subscribe(
     })
 }
 
-/// A place that is gone again by now has nothing to report but its own `Deleted`, which follows.
-async fn notice(places: &dyn Places, change: PlaceChange) -> Option<Notice> {
-    match change {
-        PlaceChange::Created(id) => Some(Notice::Created(places.get(id).await.ok()??.envelope)),
-        PlaceChange::Updated(id) => Some(Notice::Updated(places.get(id).await.ok()??.envelope)),
+/// A place that is gone again by now has nothing to report but its own `Deleted`, which follows. A
+/// read that fails is no such thing: the change cannot be told, and that ends the feed.
+async fn notice(places: &dyn Places, change: PlaceChange) -> Result<Option<Notice>, String> {
+    let current = |id| async move { places.get(id).await.map_err(|e| e.to_string()) };
+    Ok(match change {
+        PlaceChange::Created(id) => current(id)
+            .await?
+            .map(|place| Notice::Created(place.envelope)),
+        PlaceChange::Updated(id) => current(id)
+            .await?
+            .map(|place| Notice::Updated(place.envelope)),
         PlaceChange::Deleted(id) => Some(Notice::Deleted(id)),
-    }
+    })
 }

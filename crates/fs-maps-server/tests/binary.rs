@@ -1,12 +1,13 @@
-//! The real program: started, used, stopped and started again; the places are still there.
+//! The real program: started, used, stopped and started again; its data directory.
 
-use std::path::Path;
+use std::os::unix::fs::PermissionsExt as _;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use fs_interfaces::places_capnp::{places, tile_source};
-use fs_interfaces::rpc::connect;
-use fs_maps_core::testutil::write_fixture;
+use fs_interfaces::rpc::{Problem, connect};
+use fs_maps_core::testutil::{RangeServer, write_fixture};
 
 fn program(socket: &Path, data: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fs-maps-server"));
@@ -15,6 +16,7 @@ fn program(socket: &Path, data: &Path) -> Command {
         .arg(socket)
         .arg("--data")
         .arg(data)
+        .stdout(Stdio::null())
         .stderr(Stdio::null());
     command
 }
@@ -36,10 +38,10 @@ fn terminate(mut child: Child) {
         .status()
         .unwrap();
     assert!(status.success());
-    assert!(child.wait().unwrap().success());
+    assert_eq!(child.wait().unwrap().code(), Some(0));
 }
 
-async fn stored_places(socket: &Path) -> usize {
+async fn stored_names(socket: &Path) -> Vec<String> {
     let connection = connect::<places::Client>(socket).await.unwrap();
     let listed = connection
         .client
@@ -49,15 +51,31 @@ async fn stored_places(socket: &Path) -> usize {
         .await
         .unwrap();
     let page = listed.get().unwrap().get_page().unwrap();
-    page.get_items().unwrap().len() as usize
+    page.get_items()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            let envelope = p.get_envelope().unwrap();
+            envelope.get_name().unwrap().to_string().unwrap()
+        })
+        .collect()
 }
 
-async fn tile_found(socket: &Path, z: u8) -> bool {
+async fn tile(socket: &Path, z: u8) -> capnp::Result<Option<Vec<u8>>> {
     let connection = connect::<tile_source::Client>(socket).await.unwrap();
     let mut req = connection.client.tile_request();
     req.get().set_z(z);
-    let answer = req.send().promise.await.unwrap();
-    answer.get().unwrap().get_found()
+    let answer = req.send().promise.await?;
+    let r = answer.get()?;
+    Ok(r.get_found().then(|| r.get_mvt().unwrap().to_vec()))
+}
+
+fn expected_tile(z: u8) -> Vec<u8> {
+    format!("MVT-FIXTURE {z}/0/0 {}", "~".repeat(200)).into_bytes()
+}
+
+fn paths(dir: &Path) -> (PathBuf, PathBuf) {
+    (dir.join("maps.sock"), dir.join("data"))
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -66,23 +84,23 @@ async fn places_survive_a_restart_and_a_second_start_is_refused() {
     local
         .run_until(async {
             let dir = tempfile::tempdir().unwrap();
-            let socket = dir.path().join("maps.sock");
-            let data = dir.path().join("data");
+            let (socket, data) = paths(dir.path());
             let package = dir.path().join("region.pmtiles");
             write_fixture(&package, 2).await.unwrap();
             let start = || {
                 program(&socket, &data)
-                    .arg("--tiles")
-                    .arg(&package)
+                    .env("FS_MAPS_TILES", &package)
                     .spawn()
                     .unwrap()
             };
 
             let first = start();
             wait_for(&socket).await;
+            let mode = std::fs::metadata(&data).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o700, "the data directory is not private");
 
             let mut second = start();
-            assert!(!second.wait().unwrap().success(), "a second server started");
+            assert_eq!(second.wait().unwrap().code(), Some(1), "a second server");
             assert!(socket.exists(), "the second start touched the first");
 
             let connection = connect::<places::Client>(&socket).await.unwrap();
@@ -92,35 +110,56 @@ async fn places_survive_a_restart_and_a_second_start_is_refused() {
             );
             create.send().promise.await.unwrap();
             drop(connection);
-            assert!(tile_found(&socket, 2).await);
-            assert!(!tile_found(&socket, 3).await);
+            assert_eq!(tile(&socket, 2).await.unwrap().unwrap(), expected_tile(2));
+            assert_eq!(tile(&socket, 3).await.unwrap(), None);
 
             terminate(first);
             assert!(!socket.exists(), "the socket stayed behind");
 
             let again = start();
             wait_for(&socket).await;
-            assert_eq!(stored_places(&socket).await, 1);
-            assert!(tile_found(&socket, 2).await);
+            assert_eq!(stored_names(&socket).await, ["Kept"]);
+            assert_eq!(tile(&socket, 2).await.unwrap().unwrap(), expected_tile(2));
             terminate(again);
         })
         .await;
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn a_program_refuses_what_it_cannot_serve() {
-    let dir = tempfile::tempdir().unwrap();
-    let socket = dir.path().join("maps.sock");
-    let data = dir.path().join("data");
-    let run = |extra: &[&str]| {
-        let status = program(&socket, &data).args(extra).status().unwrap();
-        status.code()
-    };
-    assert_eq!(run(&["--nonsense"]), Some(2));
-    assert_eq!(run(&["--cache-mib", "many"]), Some(2));
-    assert_eq!(run(&["--tiles", "/nonexistent.pmtiles"]), Some(1));
-    let forbidden = "https://tile.openstreetmap.org/x.pmtiles";
-    assert_eq!(run(&["--tiles-url", forbidden]), Some(1));
-    assert!(!socket.exists(), "a refused start left its socket behind");
-    assert_eq!(run(&["--help"]), Some(0));
+async fn after_the_archive_is_gone_the_cache_still_answers_and_a_restart_works() {
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let dir = tempfile::tempdir().unwrap();
+            let (socket, data) = paths(dir.path());
+            let cache = dir.path().join("cache");
+            let archive = dir.path().join("remote.pmtiles");
+            write_fixture(&archive, 2).await.unwrap();
+            let server = RangeServer::start(&archive).await.unwrap();
+            let url = server.url.clone();
+            let start = || {
+                program(&socket, &data)
+                    .env("FS_MAPS_TILES_URL", &url)
+                    .env("FS_MAPS_CACHE", &cache)
+                    .env("FS_MAPS_CACHE_MIB", "1")
+                    .spawn()
+                    .unwrap()
+            };
+
+            let online = start();
+            wait_for(&socket).await;
+            assert_eq!(tile(&socket, 1).await.unwrap().unwrap(), expected_tile(1));
+            terminate(online);
+            drop(server);
+
+            let offline = start();
+            wait_for(&socket).await;
+            assert_eq!(tile(&socket, 1).await.unwrap().unwrap(), expected_tile(1));
+            let e = tile(&socket, 2).await.err().unwrap();
+            let problem = Problem::from_error(&e).unwrap();
+            assert_eq!(problem.status, 502);
+            assert_eq!(stored_names(&socket).await, Vec::<String>::new());
+            terminate(offline);
+        })
+        .await;
 }

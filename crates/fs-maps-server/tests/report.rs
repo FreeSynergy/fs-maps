@@ -2,17 +2,24 @@
 
 mod common;
 
-use std::rc::Rc;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use capnp_rpc::new_client;
+use common::seen::Seen;
 use common::{point, serving, store_places, with_server};
 use fs_interfaces::common_capnp::change_listener;
 use fs_interfaces::rpc::{Problem, is_unimplemented, write_object_id};
-use fs_interfaces::{Capabilities, UNSUPPORTED_PROBLEM_TYPE};
+use fs_interfaces::{Capabilities, Support, UNSUPPORTED_PROBLEM_TYPE};
 use fs_maps_core::{NoSource, Paging, Places, Result};
 use fs_store::{ObjectId, StoredObject};
+
+fn offered(capability: &str) -> Support {
+    Support {
+        capability: capability.into(),
+        supported: true,
+        reason: String::new(),
+    }
+}
 
 #[tokio::test(flavor = "current_thread")]
 async fn the_report_names_all_the_store_backed_provider_offers() {
@@ -29,17 +36,17 @@ async fn the_report_names_all_the_store_backed_provider_offers() {
         let version = report.get_contract_version().unwrap().to_str().unwrap();
         assert_eq!(version, "places 0.1 (draft)");
         let caps = Capabilities::read(report).unwrap();
-        for id in [
+        let expected: Vec<Support> = [
             "place.create",
             "place.update",
             "place.delete",
             "place.read",
             "place.find",
             "place.subscribe",
-        ] {
-            assert!(caps.is_supported(id), "{id}");
-        }
-        assert_eq!(caps.entries().len(), 6);
+        ]
+        .map(offered)
+        .into();
+        assert_eq!(caps.entries(), expected);
     })
     .await;
 }
@@ -75,16 +82,6 @@ impl Places for Fixed {
     }
 }
 
-struct Deaf;
-impl change_listener::Server for Deaf {
-    async fn change(
-        self: Rc<Self>,
-        _: change_listener::ChangeParams,
-    ) -> std::result::Result<(), capnp::Error> {
-        Ok(())
-    }
-}
-
 #[tokio::test(flavor = "current_thread")]
 async fn what_a_provider_does_not_offer_answers_not_possible() {
     let feed = store_places().await;
@@ -94,40 +91,47 @@ async fn what_a_provider_does_not_offer_answers_not_possible() {
         Arc::new(NoSource),
         |maps| async move {
             let p = maps.places;
-            let check = |e: capnp::Error, capability: &str| {
+            let check = |e: capnp::Error, detail: &str| {
                 assert!(is_unimplemented(&e));
                 let problem = Problem::from_error(&e).unwrap();
                 assert_eq!(problem.problem_type, UNSUPPORTED_PROBLEM_TYPE);
                 assert_eq!(problem.status, 501);
-                assert!(problem.detail.starts_with(capability), "{}", problem.detail);
+                assert_eq!(problem.detail, detail);
             };
+            let absent =
+                |capability: &str| format!("{capability}: this provider does not offer it");
+
             let mut create = p.create_request();
             create.get().set_geojson(point("x", 0.0, 0.0).as_str());
-            check(create.send().promise.await.err().unwrap(), "place.create");
+            let e = create.send().promise.await.err().unwrap();
+            check(e, &absent("place.create"));
 
             let mut update = p.update_request();
             write_object_id(update.get().init_id(), ObjectId::new());
             update.get().set_geojson(point("x", 0.0, 0.0).as_str());
-            check(update.send().promise.await.err().unwrap(), "place.update");
+            let e = update.send().promise.await.err().unwrap();
+            check(e, &absent("place.update"));
 
             let mut delete = p.delete_request();
             write_object_id(delete.get().init_id(), ObjectId::new());
-            check(delete.send().promise.await.err().unwrap(), "place.delete");
+            let e = delete.send().promise.await.err().unwrap();
+            check(e, &absent("place.delete"));
 
             let mut within = p.within_request();
             within.get().init_box();
-            check(within.send().promise.await.err().unwrap(), "place.find");
+            let e = within.send().promise.await.err().unwrap();
+            check(e, &absent("place.find"));
 
             let mut named = p.find_by_name_request();
             named.get().set_term("x");
-            check(named.send().promise.await.err().unwrap(), "place.find");
+            let e = named.send().promise.await.err().unwrap();
+            check(e, &absent("place.find"));
 
+            let listener: change_listener::Client = capnp_rpc::new_client(Seen::default());
             let mut subscribe = p.subscribe_request();
-            subscribe
-                .get()
-                .set_listener(new_client::<change_listener::Client, _>(Deaf));
+            subscribe.get().set_listener(listener);
             let e = subscribe.send().promise.await.err().unwrap();
-            check(e, "place.subscribe");
+            check(e, "place.subscribe: this list never changes");
         },
     )
     .await;

@@ -8,12 +8,12 @@ use std::sync::Arc;
 
 use fs_interfaces::Unsupported;
 use fs_interfaces::places_capnp::places;
-use fs_interfaces::rpc::unsupported;
+use fs_interfaces::rpc::{read_object_id, unsupported};
 use fs_maps_core::{Paging, PlaceFeed, Places};
 
-use crate::errors::{invalid, rpc_error};
+use crate::errors::rpc_error;
 use crate::feed::subscribe;
-use crate::wire::{CONTRACT_VERSION, read_area, read_feature, read_id, write_page, write_place};
+use crate::wire::{CONTRACT_VERSION, read_area, read_feature, read_term, write_page, write_place};
 
 const SUBSCRIBE: &str = "place.subscribe";
 
@@ -57,7 +57,7 @@ impl places::Server for PlacesImpl {
         mut results: places::UpdateResults,
     ) -> Done {
         let p = params.get()?;
-        let id = read_id(p.get_id()?)?;
+        let id = read_object_id(p.get_id()?)?;
         let feature = read_feature(p.get_geojson()?)?;
         let place = self.places.update(id, &feature).await.map_err(rpc_error)?;
         write_place(results.get().init_place(), &place)
@@ -68,7 +68,7 @@ impl places::Server for PlacesImpl {
         params: places::DeleteParams,
         _: places::DeleteResults,
     ) -> Done {
-        let id = read_id(params.get()?.get_id()?)?;
+        let id = read_object_id(params.get()?.get_id()?)?;
         self.places.delete(id).await.map_err(rpc_error)
     }
 
@@ -77,7 +77,7 @@ impl places::Server for PlacesImpl {
         params: places::GetParams,
         mut results: places::GetResults,
     ) -> Done {
-        let id = read_id(params.get()?.get_id()?)?;
+        let id = read_object_id(params.get()?.get_id()?)?;
         let found = self.places.get(id).await.map_err(rpc_error)?;
         let mut r = results.get();
         r.set_found(found.is_some());
@@ -117,7 +117,7 @@ impl places::Server for PlacesImpl {
         mut results: places::FindByNameResults,
     ) -> Done {
         let p = params.get()?;
-        let term = p.get_term()?.to_str().map_err(|e| invalid(e.to_string()))?;
+        let term = read_term(p.get_term()?)?;
         let all = self.places.find_by_name(term, WHOLE_LIST).await;
         write_page(
             results.get().init_page(),

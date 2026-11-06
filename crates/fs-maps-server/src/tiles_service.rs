@@ -7,10 +7,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use fs_interfaces::places_capnp::tile_source;
-use fs_interfaces::rpc::MAX_PAGE_BYTES;
+use fs_interfaces::rpc::check_answer;
 use fs_maps_core::TileSource;
 
-use crate::errors::{rpc_error, too_large};
+use crate::errors::rpc_error;
 use crate::wire::CONTRACT_VERSION;
 
 pub(crate) struct TilesImpl {
@@ -50,12 +50,7 @@ impl tile_source::Server for TilesImpl {
         let mut answer = results.get();
         answer.set_found(found.is_some());
         if let Some(mvt) = found {
-            if mvt.len() > MAX_PAGE_BYTES {
-                return Err(too_large(format!(
-                    "tile {z}/{x}/{y} has {} bytes, one message holds {MAX_PAGE_BYTES}",
-                    mvt.len()
-                )));
-            }
+            check_answer(mvt.len())?;
             answer.set_mvt(&mvt);
         }
         Ok(())

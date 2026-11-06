@@ -1,0 +1,69 @@
+//! The real program refusing to start: exit codes, and what it leaves behind.
+
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+fn program(socket: &Path, data: &Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_fs-maps-server"));
+    command
+        .arg("--socket")
+        .arg(socket)
+        .arg("--data")
+        .arg(data)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    command
+}
+
+fn paths(dir: &Path) -> (PathBuf, PathBuf) {
+    (dir.join("maps.sock"), dir.join("data"))
+}
+
+#[test]
+fn a_program_refuses_what_it_cannot_serve_with_the_right_code() {
+    let dir = tempfile::tempdir().unwrap();
+    let (socket, data) = paths(dir.path());
+    let code = |args: &[&str], env: &[(&str, &str)]| {
+        let mut command = program(&socket, &data);
+        command.args(args);
+        for (k, v) in env {
+            command.env(k, v);
+        }
+        command.status().unwrap().code()
+    };
+    assert_eq!(code(&["--nonsense"], &[]), Some(2));
+    assert_eq!(code(&["--actor"], &[]), Some(2));
+    assert_eq!(
+        code(&["--tiles", "x"], &[]),
+        Some(2),
+        "that is the environment's"
+    );
+    let url = ("FS_MAPS_TILES_URL", "https://example.invalid/a.pmtiles");
+    assert_eq!(code(&[], &[url, ("FS_MAPS_CACHE_MIB", "many")]), Some(2));
+    assert_eq!(
+        code(&[], &[("FS_MAPS_TILES", "/nonexistent.pmtiles")]),
+        Some(1)
+    );
+    let forbidden = (
+        "FS_MAPS_TILES_URL",
+        "https://tile.openstreetmap.org/x.pmtiles",
+    );
+    assert_eq!(code(&[], &[forbidden]), Some(1));
+    assert!(!socket.exists(), "a refused start left its socket behind");
+    assert_eq!(code(&["--help"], &[]), Some(0));
+}
+
+#[test]
+fn a_data_directory_others_can_reach_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (socket, data) = paths(dir.path());
+    std::fs::create_dir(&data).unwrap();
+    std::fs::set_permissions(&data, PermissionsExt::from_mode(0o755)).unwrap();
+    assert_eq!(program(&socket, &data).status().unwrap().code(), Some(1));
+    assert!(
+        !data.join("objects.db").exists(),
+        "it opened the store anyway"
+    );
+    assert!(!socket.exists());
+}
