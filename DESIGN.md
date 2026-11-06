@@ -1,13 +1,13 @@
 # fs-maps - Design
 
-Core (no GUI) of FreeSynergy maps: tiles load **piece by piece on demand**, are **cached locally with a size limit**,
+Core (no GUI) and Cap'n Proto server of FreeSynergy maps: tiles load **piece by piece on demand**, are **cached locally with a size limit**,
 regions can be **downloaded for offline use**, and any PMTiles source can be configured ("everybody loads their own map").
 Evidence for all policy decisions: `RESEARCH.md` (2026-11-05). Decisions: ADR 0026 (newest standards), 0030 (originals),
 0036 (packages via Git), 0013 (nothing copied: tiles are read from a source, not re-hosted by us).
 
 ## State
 
-Version 0.1.0 (first tag). `Places` is the provider of `places.capnp` (ADR 0045, 0050): trait with every method, `Unsupported` defaults, `Capabilities`; `TileSource` also reports `Capabilities`. Earlier: ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests before the provider work, all unchanged; 46 now).
+Version 0.2.0: `fs-maps-server`, the contract `places.capnp` over a Unix socket; `StorePlaces`, the owning provider with the live feed; `fs-interfaces` v0.18.0. Before, in 0.1: `Places` is the provider of `places.capnp` (ADR 0045, 0050): trait with every method, `Unsupported` defaults, `Capabilities`; `TileSource` also reports `Capabilities`. Earlier: ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests before the provider work, all unchanged; 46 now).
 
 | Area | State |
 |---|---|
@@ -19,12 +19,16 @@ Version 0.1.0 (first tag). `Places` is the provider of `places.capnp` (ADR 0045,
 | `CachedSource<S>` wrapper | done |
 | `RegionDownload` (Facade; `DownloadCommand`, `TilePlan` iterator, `ProgressObserver`): exact tile count + sampled size estimate before download, tile limit (200 000), progress + cancel callback, writes a **PMTiles v3 package** (MVT, gzip, Hilbert order, bounds/metadata/attribution) via the `pmtiles` writer | done |
 | `places`: `PlaceRepository` over `ObjectRepository` + GeoJSON `Feature` <-> `fs-store` `StoredObject` (type `Place`, `application/geo+json`, name from `properties.name`/`name:en`/`name:*`/`title`, index `geometry_type`, `bbox`, `geo`) | done, tested incl. real `TursoStore` |
-| Trait `Places` (`places/contract.rs`): required `capabilities`, `get`, `list`; defaults answering `Unsupported`: `create`, `update`, `delete`, `within`, `find_by_name`. `PlaceRepository` implements all; it reports every id of the schema except `place.subscribe` ("not built yet; it is possible") | done |
+| Trait `Places` (`places/contract.rs`): required `capabilities`, `get`, `list`; defaults answering `Unsupported`: `create`, `update`, `delete`, `within`, `find_by_name`. `PlaceRepository` implements all; it reports every id of the schema except `place.subscribe` (a borrowed repository has no live feed) | done |
+| `StorePlaces` (`places/provider.rs`): owns an `Arc<dyn Store>`, so it can live behind `Arc<dyn Places>`; runs each call through a `PlaceRepository`; writes run one at a time (an update reads, then writes: a delete between the two was undone by it, reproduced in `tests/places_feed.rs`); reports all six ids of the schema | done |
+| Trait `PlaceFeed` (`places/feed.rs`, Observer: `subscribe(listener)` -> `Subscription`; `Created` / `Updated` / `Deleted`), told after the commit, by `StorePlaces` only | done, draft |
 | `PlaceRepository` over `ObjectRepository` + `ObjectQuery` (still borrows its store: `new(&store, actor)`; behind an `Arc<dyn Store>` use `StoreView::new(&*store)`); create sets context `places` and IRI `https://<instance>/places/<id>` (`with_instance`); update keeps id, `published`, IRI, attribution | done |
 | `within(Area, Paging)`: **one store query**; the four edges of the geometry's bounding box are index keys (`lon_min`, `lon_max`, `lat_min`, `lat_max`: fixed-width decimals of 1e-7 degrees so the store's binary text order is numeric order), paged by the store. Overlap = bounding box of the geometry meets the area, edges touching count; points, lines, polygons alike; no geometry = never found | done, tested |
 | Antimeridian: an area with `west > east` is `[west,180] + [-180,east]`; one OR-group (`lon_max >= west` or `lon_min <= east`), still one query. A geometry that itself crosses 180 has a bounding box over all longitudes (RFC 7946 §5), so it is found from both sides | done, tested |
 | `find_by_name`: one store query, `Contains` (case-insensitive, normalised) on the envelope name or on the index `name` (every `name`, `name:*`, `title`) | done, tested |
 | `TileSource::capabilities()` (provided: `tile.read`; `CachedSource` forwards its inner source) | done |
+| `NoSource`: no map configured answers `Unsupported` for `tile.read`, not "no such tile"; `LazyHttpSource`: policy checked at once, the archive opened at the first tile and retried after a failure, so the program starts offline | done |
+| Server `fs-maps-server`: every method of `Places` and `TileSource`, `subscribe` (with `ended`), `supportReport` on both; errors as typed problems (`places/not-found` 404, `places/conflict` 409, `places/invalid` 422, `places/too-large` 413, `places/usage-policy` 403, `places/tile-source-failed` 502, `Unsupported` 501); binary with `--socket`, `--data`, `--actor`, `--tiles`, `--tiles-url`, `--user-agent`, `--cache`, `--cache-mib` | done, draft; open points below |
 | `geouri`: RFC 5870 `geo:` parse/format (crs=wgs84, `u=`, extra params, pole/antimeridian normalisation) | done |
 | Examples `fetch_tiles` (loopback fixture by default), `places` | done |
 | GUI, MVT decoding/rendering, styles, geocoding/search, routing | **not started** (see RESEARCH.md section 5) |
@@ -59,6 +63,14 @@ declare and re-export, every module doc has a `Pattern:` line. Callers depend on
 | `places/{geometry,name}.rs` | Interpreter-style recursion / Strategy | geometry validation; name fallback order |
 | `tile/*`, `geouri.rs` | Newtype / Parser | validated `Tile`, `BBox`, `GeoUri` |
 | `testutil/*` | Fake | loopback range server + PMTiles fixture |
+| `places/feed.rs` | Observer | `PlaceFeed`, `PlaceListener`, `Registry` (subject), `Subscription` (drop = unsubscribe) |
+| `places/provider.rs` | Facade + Observer | `StorePlaces`: what a program serves; one repository per call, the feed on top |
+| `source/none.rs` | Null Object | a program without a map still has the interface, and says "not possible" |
+| `source/lazy.rs` | Proxy | stands in for the HTTP source until the network answers |
+| `fs-maps-server/root.rs` | Facade + Adapter | `MapsServer`, one capability for both interfaces, sent on by interface id; depends on the traits only |
+| `fs-maps-server/{places_service,tiles_service}.rs` | Adapter | wire in, trait call, wire out |
+| `fs-maps-server/{wire,errors,feed}.rs` | Adapter, Observer | places on the wire and what fits a message, core errors as RFC 9457 problems, `PlaceFeed` to the shared forwarder |
+| `fs-maps-server/sources.rs` | Factory + Chain of Responsibility | which tiles, from the configuration: local packages first, then the remote archive through the cache |
 
 ## Policy rules built in
 
@@ -98,7 +110,13 @@ file mtime so the order survives restarts). One process owns a cache dir (no cro
   server was found.
 * **Question to the owner (provisional):** the overlap rule. Today a place matches `within` when the bounding box of its geometry meets the area (an L-shaped polygon matches a box in its empty notch; a geometry over the antimeridian matches everywhere along the latitude band). Exact geometry tests would need a geometry library (ADR 0015) and could not run in the store.
 * **Question to the owner (provisional):** index precision 1e-7 degrees (about 1 cm), rounded outwards, so a place at most 1e-7 degrees outside an area can still match. Raising it would need a wider key.
-* **Question to the owner:** `place.subscribe`, and the cursor form: the Rust API pages with `Paging { limit, offset }`; the wire `Cursor` will wrap the offset (offset paging costs O(offset) in the store).
+* **Contract gap:** `places.capnp` has no `capabilities` method, unlike `tasks.capnp` and `history.capnp`, so `Capabilities::write_list` has nothing to answer; `supportReport` on both interfaces says the same and more. Proposal, append only: `capabilities @9` on `Places` and `@3` on `TileSource`.
+* **Contract gap, provisional answer:** the schema has two root interfaces and no way from one to the other, a program has one socket. The root capability answers both by interface id; a consumer connects as `places::Client` or as `tile_source::Client` on the same socket, and any other interface is `unimplemented`. Proposal: `tiles @10 () -> (source :TileSource)` on `Places`, then this hand-written dispatch goes away.
+* **Provisional:** `TileSource.id` of the `NoSource` answers `none`, not `Unsupported`: the method has no capability id of its own and "none" is true; `supportReport` and `tile` carry the "not possible".
+* **Paging:** the server reads the whole result for each page, as `Page::of_weighted` needs it and the cursor's form is private to `fs_interfaces::rpc`; the store's own paging (`Paging { limit, offset }`) is unused on the wire, so a large `list` costs O(all places) per page. The limit is the shared one in `fs-interfaces/DESIGN.md`; with a public cursor position the server would need one line.
+* **Limits:** a place may have up to `MAX_PAGE_BYTES` of GeoJSON as stored; more is `places/too-large`, measured after parsing. A tile cannot be cut, so one above `MAX_PAGE_BYTES` is `places/too-large`, not truncated, and `clamp_read` does not apply (the contract has no length). The pmtiles reader decompresses before that check: a hostile archive can still cost memory.
+* **Feed:** it tells what went through `StorePlaces`, the only writer of the program's store. An undo through the store itself is not told; the contract has no undo. `PlaceRepository` alone has neither the feed nor the one-at-a-time rule. `Registry` has the same shape as in `fs-tasks-core` (ADR 0043 section 4: move it to a shared crate, a change for `fs-interfaces`).
+* The server has no `--instance` yet, as in `fs-tasks-server`: IRIs say `local.invalid` (`StorePlaces::with_instance` exists).
 * Tile ranges (`region`) still do not cross the antimeridian (`tile::BBox`, unchanged); the search `Area` is a separate type that does.
 * Zoom > 22 and `crs` other than wgs84 are unsupported.
 * Places: `Place` objects are plain GeoJSON features; AS2 `latitude/longitude/radius` are not mirrored (envelope has no
@@ -108,5 +126,4 @@ file mtime so the order survives restarts). One process owns a cache dir (no cro
 
 ## Tests
 
-`cargo test`: tests by feature in `tests/` (`cache`, `cache_model`, `region`, `source`, `places`, `places_crud`, `places_find`, `provider`, `http_fixture`), unit tests next to `tile`, `geouri`, `source/policy`; property tests (cache limit + LRU model, `geo:` roundtrip), integration test
-`tests/http_fixture.rs` (loopback range server, cache, region download, offline chain). Nothing contacts a public server.
+`cargo test --workspace --all-features`. Core: tests by feature in `tests/` (`cache`, `cache_model`, `region`, `source`, `places`, `places_crud`, `places_find`, `places_feed`, `provider`, `http_fixture`), unit tests next to `tile`, `geouri`, `source/policy`; property tests (cache limit + LRU model, `geo:` roundtrip), integration test `tests/http_fixture.rs` (loopback range server, cache, region download, offline chain). Server: `tests/{places,find,errors,report,feed,tiles,binary}.rs` over a real Unix socket against `TursoStore` behind `StorePlaces`, local PMTiles fixtures and the loopback range server; `binary` runs the real program across a restart. Nothing contacts a public server.
