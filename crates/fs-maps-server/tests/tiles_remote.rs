@@ -92,15 +92,12 @@ async fn a_remote_archive_reads_through_the_cache_after_the_local_package() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn credentials_in_the_url_reach_no_consumer() {
+async fn a_token_in_the_url_reaches_no_consumer() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("remote.pmtiles");
     write_fixture(&file, 1).await.unwrap();
     let server = RangeServer::start(&file).await.unwrap();
-    let url = format!(
-        "{}?token=secret",
-        server.url.replace("http://", "http://me:secret@")
-    );
+    let url = format!("{}?token=secret", server.url);
     let config = TileConfig {
         url: Some(url),
         user_agent: UA.into(),
@@ -118,7 +115,7 @@ async fn credentials_in_the_url_reach_no_consumer() {
     .await;
 
     let dead = TileConfig {
-        url: Some("http://me:secret@127.0.0.1:9/map.pmtiles?token=secret".into()),
+        url: Some("http://127.0.0.1:9/map.pmtiles?token=secret".into()),
         user_agent: UA.into(),
         ..TileConfig::default()
     };

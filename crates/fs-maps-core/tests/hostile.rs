@@ -1,10 +1,9 @@
 //! Archives that lie: bounded memory, and what is not MVT is refused at open.
 
-use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
-use fs_maps_core::testutil::write_fixture;
+use fs_maps_core::testutil::{archive, big_directory, brotli, directory, gzip, write_fixture};
 use fs_maps_core::{
     BBox, Error, MAX_TILE_BYTES, MemorySource, PmtilesFileSource, RegionDownload, RegionSpec,
     TileSource,
@@ -16,64 +15,6 @@ const BROTLI: u8 = 3;
 const ZSTD: u8 = 4;
 const MVT: u8 = 1;
 const PNG: u8 = 2;
-
-fn gzip(data: &[u8]) -> Vec<u8> {
-    let mut out = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
-    out.write_all(data).unwrap();
-    out.finish().unwrap()
-}
-
-fn brotli(data: &[u8]) -> Vec<u8> {
-    let mut w = brotli::CompressorWriter::new(Vec::new(), 4096, 1, 20);
-    w.write_all(data).unwrap();
-    w.into_inner()
-}
-
-fn varint(mut v: u64, out: &mut Vec<u8>) {
-    while v >= 0x80 {
-        out.push((v as u8) | 0x80);
-        v >>= 7;
-    }
-    out.push(v as u8);
-}
-
-/// One entry at tile 0. `run` 0 marks a leaf directory.
-fn directory(run: u64, length: u64) -> Vec<u8> {
-    let mut out = Vec::new();
-    for v in [1, 0, run, length, 1] {
-        varint(v, &mut out);
-    }
-    out
-}
-
-/// A PMTiles v3 file put together by hand, as an attacker would.
-fn archive(kinds: [u8; 3], root: &[u8], leaf: &[u8], data: &[u8], claimed_data: u64) -> Vec<u8> {
-    let [internal, tiles, tile_type] = kinds;
-    let mut out = b"PMTiles\x03".to_vec();
-    let (root_at, leaf_at) = (127u64, 127 + root.len() as u64);
-    let data_at = leaf_at + leaf.len() as u64;
-    for v in [
-        root_at,
-        root.len() as u64,
-        data_at,
-        0,
-        leaf_at,
-        leaf.len() as u64,
-        data_at,
-        claimed_data,
-        1,
-        1,
-        1,
-    ] {
-        out.extend_from_slice(&v.to_le_bytes());
-    }
-    out.extend_from_slice(&[0, internal, tiles, tile_type, 0, 0]);
-    out.resize(127, 0);
-    out.extend_from_slice(root);
-    out.extend_from_slice(leaf);
-    out.extend_from_slice(data);
-    out
-}
 
 async fn open(dir: &Path, bytes: &[u8]) -> fs_maps_core::Result<PmtilesFileSource> {
     let path = dir.join("hostile.pmtiles");
@@ -152,7 +93,7 @@ async fn a_leaf_directory_stops_at_its_limit() {
 #[tokio::test]
 async fn a_root_directory_stops_at_its_limit() {
     let dir = tempfile::tempdir().unwrap();
-    let root = brotli(&vec![0u8; 32 * 1024 * 1024]);
+    let root = brotli(&vec![0u8; 8 * 1024 * 1024]);
     assert!(root.len() < 16 * 1024);
     let bytes = archive([BROTLI, NONE, MVT], &root, &[], b"x", 1);
     let e = open(dir.path(), &bytes).await.err().unwrap();
@@ -196,4 +137,32 @@ async fn only_mvt_in_a_compression_we_read_opens() {
         assert!(matches!(e, Error::Archive(_)), "{at}: {e:?}");
         assert!(e.to_string().contains(says), "{at}: {e}");
     }
+}
+
+#[tokio::test]
+async fn a_directory_at_the_limit_is_read_and_one_over_it_is_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let limit = 4 * 1024 * 1024;
+    let tile_bytes = b"reached".to_vec();
+    let with_leaf = |raw: Vec<u8>| {
+        let leaf = gzip(&raw);
+        let root = gzip(&directory(0, leaf.len() as u64));
+        archive([GZIP, NONE, MVT], &root, &leaf, &tile_bytes, 7)
+    };
+    let source = open(dir.path(), &with_leaf(big_directory(limit)))
+        .await
+        .unwrap();
+    assert_eq!(
+        source.get_tile(0, 0, 0).await.unwrap().unwrap(),
+        &b"reached"[..]
+    );
+    let source = open(dir.path(), &with_leaf(big_directory(limit + 8)))
+        .await
+        .unwrap();
+    let e = source.get_tile(0, 0, 0).await.unwrap_err();
+    assert!(
+        e.to_string()
+            .contains("directory of the archive is too large"),
+        "{e}"
+    );
 }

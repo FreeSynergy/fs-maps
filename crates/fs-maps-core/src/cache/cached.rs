@@ -70,10 +70,11 @@ impl<S: TileSource> TileSource for CachedSource<S> {
         }
         match self.inner.get_tile(z, x, y).await {
             Ok(Some(t)) => {
-                if t.len() <= MAX_TILE_BYTES {
-                    // The source may have seen a new version by now. A failing cache write must not
-                    // fail the read.
-                    let _ = self.cache.put(&self.key(), z, x, y, &t);
+                // Only under the version it was asked under: the archive may have changed while this
+                // read was on its way, and these bytes may be of either version. A failing cache
+                // write must not fail the read.
+                if t.len() <= MAX_TILE_BYTES && self.key() == key {
+                    let _ = self.cache.put(&key, z, x, y, &t);
                 }
                 Ok(Some(t))
             }

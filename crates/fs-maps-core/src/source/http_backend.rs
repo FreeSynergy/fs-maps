@@ -2,7 +2,8 @@
 //!
 //! Pattern: Adapter over `reqwest` behind `AsyncBackend` — the backend of the `pmtiles` crate reads
 //! whatever body a server sends. This one stops at what was asked for, follows a redirect only if the
-//! policy allows it, and keeps the URL, which may hold credentials, out of its errors.
+//! policy allows it, and keeps the URL, whose query may hold a token, out of its errors and out of
+//! every `Referer`.
 
 use std::time::Duration;
 
@@ -40,6 +41,7 @@ pub(super) fn http_client(user_agent: &str) -> Result<Client> {
         .read_timeout(READ_TIMEOUT)
         .timeout(REQUEST_TIMEOUT)
         .redirect(policy)
+        .referer(false)
         .build()
         .map_err(pmtiles::reqwest::Error::without_url)?;
     Ok(client)
@@ -61,13 +63,12 @@ impl AsyncBackend for HttpBackend {
         let range = HeaderValue::try_from(format!("bytes={offset}-{end}"))?;
         let mut request = Request::new(Method::GET, self.url.clone());
         request.headers_mut().insert(RANGE, range);
-        let mut response = self
-            .client
-            .execute(request)
-            .await
-            .map_err(clean)?
-            .error_for_status()
-            .map_err(clean)?;
+        let response = self.client.execute(request).await.map_err(clean)?;
+        // A directory pointed past the end: the archive got smaller since it was opened.
+        if response.status() == StatusCode::RANGE_NOT_SATISFIABLE {
+            return Err(PmtError::SourceModified);
+        }
+        let mut response = response.error_for_status().map_err(clean)?;
         if response.status() != StatusCode::PARTIAL_CONTENT {
             return Err(PmtError::RangeRequestsUnsupported);
         }

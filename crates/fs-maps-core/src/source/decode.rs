@@ -12,11 +12,14 @@ use pmtiles::Compression;
 
 /// Largest tile a source hands out; the same as `MAX_PAGE_BYTES` of the rpc side, checked in its test.
 pub const MAX_TILE_BYTES: usize = 32 * 1024 * 1024;
-/// Largest directory, decompressed. Real leaf directories stay far below it.
-pub(super) const MAX_DIRECTORY_BYTES: usize = 16 * 1024 * 1024;
+/// Largest directory, decompressed; it parses to at most six times this. A writer grows its leaves
+/// until the root fits 16 KiB, about 2 500 entries: a planet of some 350 million entries has leaves of
+/// about 150 000 entries, 1 to 2 MiB (reckoned, see `DESIGN.md`).
+pub(super) const MAX_DIRECTORY_BYTES: usize = 4 * 1024 * 1024;
 
 fn up_to(reader: impl Read, limit: usize) -> io::Result<Option<Bytes>> {
-    let mut out = Vec::new();
+    // All at once: pages not written cost nothing, and growing by doubling would cost twice the limit.
+    let mut out = Vec::with_capacity(limit + 1);
     reader.take(limit as u64 + 1).read_to_end(&mut out)?;
     Ok((out.len() <= limit).then(|| Bytes::from(out)))
 }

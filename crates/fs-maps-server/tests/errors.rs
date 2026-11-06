@@ -130,3 +130,46 @@ async fn a_stored_place_that_no_longer_reads_is_not_the_callers_fault() {
     })
     .await;
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_place_stored_before_a_rule_was_added_still_reads() {
+    with_store(|maps, store| async move {
+        let p = maps.places;
+        // A ring of three positions, refused now and accepted by an earlier version.
+        let geojson = json!({"type":"Feature",
+            "geometry":{"type":"Polygon","coordinates":[[[0,0],[2,0],[0,0]]]},
+            "properties":{"name":"Old"}});
+        let old = StoredObject::new(
+            Envelope::new("Place", "Old"),
+            "application/geo+json",
+            geojson.clone(),
+        );
+        let id = old.envelope.id;
+        store.put(old, common::ME).await.unwrap();
+
+        let mut get = p.get_request();
+        write_object_id(get.get().init_id(), id);
+        let got = get.send().promise.await.unwrap();
+        let text = got
+            .get()
+            .unwrap()
+            .get_place()
+            .unwrap()
+            .get_geojson()
+            .unwrap();
+        let read: serde_json::Value = serde_json::from_str(text.to_str().unwrap()).unwrap();
+        assert_eq!(read, geojson);
+        assert_eq!(list_all(&p).await.0, [id]);
+
+        // Coming in again it meets today's rule, and it stays as it was.
+        let mut update = p.update_request();
+        write_object_id(update.get().init_id(), id);
+        update.get().set_geojson(geojson.to_string().as_str());
+        assert_eq!(refused(update.send().promise.await), is(INVALID, 422));
+        let mut create = p.create_request();
+        create.get().set_geojson(geojson.to_string().as_str());
+        assert_eq!(refused(create.send().promise.await), is(INVALID, 422));
+        assert_eq!(list_all(&p).await.0, [id]);
+    })
+    .await;
+}

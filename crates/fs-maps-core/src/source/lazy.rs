@@ -15,6 +15,7 @@ use pmtiles::PmtError;
 use pmtiles::reqwest::{Client, Url};
 
 use super::http_backend::http_client;
+use super::pmt::IN_FLIGHT;
 use super::policy::{check_url, public_id};
 use super::{PmtilesHttpSource, SourceInfo, TileSource};
 use crate::error::{Error, Result};
@@ -22,7 +23,6 @@ use crate::tile::Tile;
 
 const OPEN_TIMEOUT: Duration = Duration::from_secs(8);
 const BACKOFF: Duration = Duration::from_secs(30);
-const IN_FLIGHT: usize = 4;
 
 /// A [`PmtilesHttpSource`] that opens when the first tile is asked for.
 pub struct LazyHttpSource {

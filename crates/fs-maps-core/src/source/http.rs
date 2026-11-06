@@ -1,17 +1,14 @@
 //! Remote PMTiles archive as a tile source.
 //!
 //! Pattern: Adapter — an archive over the HTTP backend, behind [`TileSource`], with the usage policy
-//! applied at construction and a semaphore bounding requests in flight.
-
-use std::sync::Arc;
+//! applied at construction.
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use pmtiles::reqwest::{Client, Url};
-use tokio::sync::Semaphore;
 
 use super::http_backend::{HttpBackend, http_client};
-use super::pmt::Archive;
+use super::pmt::{Archive, IN_FLIGHT};
 use super::policy::{check_url, public_id};
 use super::{SourceInfo, TileSource};
 use crate::error::Result;
@@ -21,7 +18,6 @@ use crate::error::Result;
 pub struct PmtilesHttpSource {
     url: Url,
     archive: Archive<HttpBackend>,
-    limit: Arc<Semaphore>,
 }
 
 impl PmtilesHttpSource {
@@ -29,7 +25,7 @@ impl PmtilesHttpSource {
     /// `"FreeSynergy-Maps/0.1 (+https://example.org; contact: ops@example.org)"`); library
     /// defaults are rejected, as the OSMF policy requires. At most 4 requests are in flight.
     pub async fn open(url: &str, user_agent: &str) -> Result<Self> {
-        Self::open_with(url, user_agent, 4).await
+        Self::open_with(url, user_agent, IN_FLIGHT).await
     }
 
     /// Like [`PmtilesHttpSource::open`] with a custom in-flight request limit.
@@ -45,8 +41,7 @@ impl PmtilesHttpSource {
         };
         Ok(Self {
             url,
-            archive: Archive::open(backend).await?,
-            limit: Arc::new(Semaphore::new(max_in_flight.max(1))),
+            archive: Archive::open(backend, max_in_flight).await?,
         })
     }
 }
@@ -57,7 +52,6 @@ impl TileSource for PmtilesHttpSource {
         public_id(&self.url)
     }
     async fn get_tile(&self, z: u8, x: u32, y: u32) -> Result<Option<Bytes>> {
-        let _permit = self.limit.acquire().await.expect("semaphore never closed");
         self.archive.tile(z, x, y).await
     }
     fn info(&self) -> Option<SourceInfo> {

@@ -31,13 +31,25 @@ async fn a_redirect_stays_on_its_host() {
     assert!(PmtilesHttpSource::open(&start.url, UA).await.is_err());
     assert_eq!(other.requests.load(Ordering::SeqCst), 0, "it left the host");
 
+    // Another port on the same host is another service, and nothing tells it where we came from.
+    let port = other.url.replace("map.pmtiles", "elsewhere.pmtiles");
+    start.redirect_to(&port);
+    assert!(PmtilesHttpSource::open(&start.url, UA).await.is_err());
+    assert_eq!(other.requests.load(Ordering::SeqCst), 0, "it left the port");
+
     let forbidden = "https://tile.openstreetmap.org/x.pmtiles";
     start.redirect_to(forbidden);
     assert!(PmtilesHttpSource::open(&start.url, UA).await.is_err());
 
     let moved = start.url.replace("map.pmtiles", "moved.pmtiles");
     start.redirect_to(&moved);
-    let source = PmtilesHttpSource::open(&start.url, UA).await.unwrap();
+    let with_token = format!("{}?token=secret", start.url);
+    let source = PmtilesHttpSource::open(&with_token, UA).await.unwrap();
+    assert_eq!(
+        *start.referers.lock().unwrap(),
+        [] as [String; 0],
+        "a Referer went out"
+    );
     assert_eq!(
         source.get_tile(1, 0, 0).await.unwrap().unwrap(),
         labelled("A", 1, 0, 0)
@@ -63,13 +75,10 @@ async fn a_forbidden_host_or_user_agent_fails_at_construction() {
 }
 
 #[tokio::test]
-async fn credentials_in_the_url_are_not_shown() {
+async fn a_token_in_the_url_is_not_shown() {
     let dir = tempfile::tempdir().unwrap();
     let server = served(dir.path(), "S").await;
-    let url = format!(
-        "{}?token=secret",
-        server.url.replace("http://", "http://me:secret@")
-    );
+    let url = format!("{}?token=secret", server.url);
     let public = server.url.clone();
     let lazy = LazyHttpSource::new(&url, UA).unwrap();
     assert_eq!(lazy.id(), public);
@@ -77,7 +86,7 @@ async fn credentials_in_the_url_are_not_shown() {
     assert!(lazy.get_tile(1, 0, 0).await.unwrap().is_some());
     assert_eq!(lazy.id(), public);
 
-    let dead = "http://me:secret@127.0.0.1:9/map.pmtiles?token=secret";
+    let dead = "http://127.0.0.1:9/map.pmtiles?token=secret";
     let lazy = LazyHttpSource::new(dead, UA).unwrap();
     for _ in 0..2 {
         let text = lazy.get_tile(0, 0, 0).await.unwrap_err().to_string();

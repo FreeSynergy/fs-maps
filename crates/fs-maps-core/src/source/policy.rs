@@ -14,6 +14,11 @@ const FORBIDDEN_HOSTS: &[&str] = &["tile.openstreetmap.org", "tile.osm.org"];
 /// Parse and validate a source URL (scheme, forbidden hosts).
 pub(super) fn check_url(url: &str) -> Result<Url> {
     let url = Url::parse(url).map_err(|e| Error::Policy(format!("bad URL: {e}")))?;
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(Error::Policy(
+            "a user and password in the URL are not supported; a token in its query is".into(),
+        ));
+    }
     if !matches!(url.scheme(), "https" | "http") {
         return Err(Error::Policy(format!(
             "unsupported scheme {}",
@@ -45,15 +50,20 @@ pub(super) fn public_id(url: &Url) -> String {
     shown.to_string()
 }
 
-/// A redirect may stay on its host and not lose TLS; the target passes the same checks as the start.
+/// A redirect may stay on its host and port and not lose TLS, or go from http on 80 to https on 443;
+/// the target passes the same checks as the start.
 pub(super) fn redirect_allowed(from: &Url, to: &Url) -> bool {
     let host = |u: &Url| {
         u.host_str()
             .map(|h| h.trim_end_matches('.').to_ascii_lowercase())
     };
-    host(from) == host(to)
-        && !(from.scheme() == "https" && to.scheme() != "https")
-        && check_url(to.as_str()).is_ok()
+    let (ports, schemes) = (
+        (from.port_or_known_default(), to.port_or_known_default()),
+        (from.scheme(), to.scheme()),
+    );
+    let same_service = ports.0 == ports.1 && schemes.0 == schemes.1;
+    let upgrade = schemes == ("http", "https") && ports == (Some(80), Some(443));
+    host(from) == host(to) && (same_service || upgrade) && check_url(to.as_str()).is_ok()
 }
 
 /// Reject empty or library-default User-Agents.
@@ -116,6 +126,21 @@ mod tests {
             &osm,
             &url("https://tile.openstreetmap.org/b")
         ));
+    }
+
+    #[test]
+    fn a_user_in_the_url_is_refused_without_repeating_it() {
+        for url in [
+            "https://me:secret@example.org/a",
+            "https://secret@example.org/a",
+        ] {
+            let text = check_url(url).unwrap_err().to_string();
+            assert!(
+                text.contains("not supported") && !text.contains("secret"),
+                "{text}"
+            );
+        }
+        assert!(check_url("https://example.org/a?token=secret").is_ok());
     }
 
     #[test]

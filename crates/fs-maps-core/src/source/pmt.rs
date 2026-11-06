@@ -2,13 +2,15 @@
 //!
 //! Pattern: Adapter + Facade — translates the foreign header and reader into our `SourceInfo` and
 //! tile reads, on top of the guard. `TileSource` promises uncompressed MVT, so an archive of anything
-//! else is refused at open and not later per tile.
+//! else is refused at open and not later per tile. What one tile costs is bounded by the guard; how
+//! many at a time, whatever the backend, by the semaphore here.
 
 use std::io;
 use std::sync::Arc;
 
 use bytes::Bytes;
 use pmtiles::{AsyncBackend, AsyncPmTilesReader, Compression, Header, PmtError, TileId, TileType};
+use tokio::sync::Semaphore;
 
 use super::SourceInfo;
 use super::decode::{MAX_TILE_BYTES, bounded};
@@ -44,10 +46,14 @@ fn check(header: &Header) -> Result<()> {
 pub(super) struct Archive<B: AsyncBackend + Sync + Send> {
     reader: AsyncPmTilesReader<Guarded<B>, BoundedDirectories>,
     facts: Arc<Facts>,
+    in_flight: Semaphore,
 }
 
+/// Tiles of one archive read at the same time.
+pub(super) const IN_FLIGHT: usize = 4;
+
 impl<B: AsyncBackend + Sync + Send> Archive<B> {
-    pub(super) async fn open(backend: B) -> Result<Self> {
+    pub(super) async fn open(backend: B, in_flight: usize) -> Result<Self> {
         let facts = Arc::new(Facts::default());
         let guarded = Guarded {
             inner: backend,
@@ -58,7 +64,11 @@ impl<B: AsyncBackend + Sync + Send> Archive<B> {
                 .await
                 .map_err(no_zstd)?;
         check(reader.get_header())?;
-        Ok(Self { reader, facts })
+        Ok(Self {
+            reader,
+            facts,
+            in_flight: Semaphore::new(in_flight.max(1)),
+        })
     }
 
     pub(super) fn info(&self) -> SourceInfo {
@@ -82,6 +92,11 @@ impl<B: AsyncBackend + Sync + Send> Archive<B> {
 
     pub(super) async fn tile(&self, z: u8, x: u32, y: u32) -> Result<Option<Bytes>> {
         let tile = Tile::new(z, x, y)?;
+        let _permit = self
+            .in_flight
+            .acquire()
+            .await
+            .expect("semaphore never closed");
         let large = || Error::TileTooLarge { z, x, y };
         let raw = match self.reader.get_tile(TileId::from(tile.pmt()?)).await {
             Ok(raw) => raw,

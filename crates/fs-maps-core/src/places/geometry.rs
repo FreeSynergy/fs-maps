@@ -85,7 +85,22 @@ fn check_shape(kind: &str, coords: &Value) -> Result<()> {
     }
 }
 
-/// Validates a geometry and returns all its positions.
+/// What a new geometry must be: its positions valid and its shape what RFC 7946 asks. A place stored
+/// earlier is only read with [`geometry_positions`], so a rule added later does not take it away.
+pub(super) fn checked_geometry(g: &Value) -> Result<(String, Vec<(f64, f64)>)> {
+    let found = geometry_positions(g)?;
+    if found.0 == "GeometryCollection" {
+        let members = g.get("geometries").map_or(&[][..], members);
+        members
+            .iter()
+            .try_for_each(|m| checked_geometry(m).map(|_| ()))?;
+    } else if let Some(coords) = g.get("coordinates") {
+        check_shape(&found.0, coords)?;
+    }
+    Ok(found)
+}
+
+/// The positions of a geometry, each one valid.
 pub(super) fn geometry_positions(g: &Value) -> Result<(String, Vec<(f64, f64)>)> {
     let Some(t) = g.get("type").and_then(Value::as_str) else {
         return gj("geometry without type");
@@ -111,7 +126,6 @@ pub(super) fn geometry_positions(g: &Value) -> Result<(String, Vec<(f64, f64)>)>
         return gj("geometry without coordinates");
     };
     collect(c, depth, &mut pts)?;
-    check_shape(t, c)?;
     Ok((t.to_owned(), pts))
 }
 

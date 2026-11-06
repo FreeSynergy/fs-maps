@@ -80,3 +80,47 @@ async fn a_tile_too_large_is_not_written_to_disk() {
     assert_eq!(cs.cache().disk_bytes(), 0);
     assert_eq!(cs.cache().stats().entries, 0);
 }
+
+/// A source whose archive changes while a read is on its way: the read still brings the old bytes.
+struct Changes(std::sync::Mutex<&'static str>);
+
+#[async_trait]
+impl TileSource for Changes {
+    fn id(&self) -> String {
+        "changes".into()
+    }
+    fn version(&self) -> Option<String> {
+        Some((*self.0.lock().unwrap()).to_string())
+    }
+    async fn get_tile(&self, _: u8, _: u32, _: u32) -> Result<Option<Bytes>> {
+        let mut version = self.0.lock().unwrap();
+        let bytes = Bytes::from_static(if *version == "v1" {
+            b"v1 bytes"
+        } else {
+            b"v2 bytes"
+        });
+        *version = "v2";
+        Ok(Some(bytes))
+    }
+}
+
+#[tokio::test]
+async fn a_read_under_way_when_the_archive_changes_is_not_kept_for_the_new_version() {
+    let (_d, c) = cache(1000, None);
+    let cs = CachedSource::new(Changes(std::sync::Mutex::new("v1")), Arc::new(c));
+    assert_eq!(
+        cs.get_tile(1, 0, 0).await.unwrap().unwrap(),
+        &b"v1 bytes"[..]
+    );
+    assert_eq!(cs.cache().stats().entries, 0);
+    assert_eq!(
+        cs.get_tile(1, 0, 0).await.unwrap().unwrap(),
+        &b"v2 bytes"[..]
+    );
+    assert_eq!(cs.cache().stats().entries, 1);
+    assert_eq!(
+        cs.get_tile(1, 0, 0).await.unwrap().unwrap(),
+        &b"v2 bytes"[..]
+    );
+    assert_eq!(cs.cache().stats().hits, 1);
+}

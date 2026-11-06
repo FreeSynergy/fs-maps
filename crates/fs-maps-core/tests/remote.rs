@@ -47,6 +47,36 @@ async fn a_replaced_archive_is_opened_again_and_versions_do_not_mix() {
 }
 
 #[tokio::test]
+async fn a_replaced_archive_of_another_layout_is_opened_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = served(dir.path(), "OLD").await;
+    let source = LazyHttpSource::new(&server.url, UA).unwrap();
+    source.get_tile(0, 0, 0).await.unwrap().unwrap();
+
+    // Larger, with other bytes at every offset: they must not reach the decompression.
+    let larger = dir.path().join("larger.pmtiles");
+    write_labelled(&larger, 4, "LARGER").await.unwrap();
+    server.replace_archive(&larger, "larger").unwrap();
+    let before = server.requests.load(Ordering::SeqCst);
+    let tile = source.get_tile(2, 1, 1).await.unwrap().unwrap();
+    assert_eq!(tile, labelled("LARGER", 2, 1, 1));
+    let used = server.requests.load(Ordering::SeqCst) - before;
+    assert!(
+        used <= 3,
+        "{used} requests: one stale read, one open, one tile"
+    );
+
+    // Smaller, and the tile lies past its end: 416, and there the archive has no such tile.
+    let tiny = dir.path().join("tiny.pmtiles");
+    write_labelled(&tiny, 0, "TINY").await.unwrap();
+    server.replace_archive(&tiny, "tiny").unwrap();
+    assert_eq!(source.get_tile(4, 15, 15).await.unwrap(), None);
+    let tile = source.get_tile(0, 0, 0).await.unwrap().unwrap();
+    assert_eq!(tile, labelled("TINY", 0, 0, 0));
+    assert_eq!(source.version().as_deref(), Some("\"tiny\""));
+}
+
+#[tokio::test]
 async fn a_tile_that_cannot_exist_reaches_no_server() {
     let dir = tempfile::tempdir().unwrap();
     let server = served(dir.path(), "T").await;

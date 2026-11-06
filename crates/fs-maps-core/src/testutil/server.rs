@@ -18,6 +18,8 @@ pub struct RangeServer {
     pub requests: Arc<AtomicUsize>,
     /// `User-Agent` of every request.
     pub user_agents: Arc<Mutex<Vec<String>>>,
+    /// `Referer` of every request that had one.
+    pub referers: Arc<Mutex<Vec<String>>>,
     script: Arc<Mutex<Script>>,
     task: tokio::task::JoinHandle<()>,
 }
@@ -50,13 +52,14 @@ impl RangeServer {
         let url = format!("http://{}/map.pmtiles", listener.local_addr()?);
         let requests = Arc::new(AtomicUsize::new(0));
         let user_agents = Arc::new(Mutex::new(Vec::new()));
-        let (rq, ua) = (requests.clone(), user_agents.clone());
+        let referers = Arc::new(Mutex::new(Vec::new()));
+        let (rq, ua, rf) = (requests.clone(), user_agents.clone(), referers.clone());
         let task = tokio::spawn(async move {
             loop {
                 let Ok((mut sock, _)) = listener.accept().await else {
                     return;
                 };
-                let (script, rq, ua) = (shared.clone(), rq.clone(), ua.clone());
+                let (script, rq, ua, rf) = (shared.clone(), rq.clone(), ua.clone(), rf.clone());
                 tokio::spawn(async move {
                     let mut buf = vec![0u8; 8192];
                     let Ok(n) = sock.read(&mut buf).await else {
@@ -73,6 +76,9 @@ impl RangeServer {
                     ua.lock()
                         .unwrap()
                         .push(header("user-agent").unwrap_or_default());
+                    if let Some(referer) = header("referer") {
+                        rf.lock().unwrap().push(referer);
+                    }
                     let range = header("range").and_then(|r| {
                         let r = r.strip_prefix("bytes=")?;
                         let (a, b) = r.split_once('-')?;
@@ -119,6 +125,7 @@ impl RangeServer {
             url,
             requests,
             user_agents,
+            referers,
             script,
             task,
         })

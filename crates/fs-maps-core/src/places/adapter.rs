@@ -10,7 +10,7 @@ use fs_store::{Envelope, StoredObject};
 use serde_json::{Map, Value};
 
 use super::bounds::bbox_index;
-use super::geometry::{feature_bbox, geometry_positions};
+use super::geometry::{checked_geometry, feature_bbox, geometry_positions};
 use super::name::{feature_name, feature_names};
 use super::search::NAME_KEY;
 use crate::error::{Error, Result};
@@ -44,7 +44,7 @@ pub fn place_from_feature(feature: &Value, attributed_to: Option<&str>) -> Resul
     };
     let mut index = fs_store::IndexFields::new();
     if let Some(g) = feature.get("geometry").filter(|g| !g.is_null()) {
-        let (t, pts) = geometry_positions(g)?;
+        let (t, pts) = checked_geometry(g)?;
         index.insert("geometry_type".into(), vec![t.clone()]);
         if let Some(b) = feature_bbox(feature)? {
             index.insert(
@@ -74,7 +74,7 @@ pub fn place_from_feature(feature: &Value, attributed_to: Option<&str>) -> Resul
     Ok(obj)
 }
 
-/// Store object -> GeoJSON `Feature` (validated again; the envelope name is written back into
+/// Store object -> GeoJSON `Feature` (positions validated again, the shape only on the way in; the envelope name is written back into
 /// `properties.name` if the feature does not carry one).
 pub fn feature_from_place(obj: &StoredObject) -> Result<Value> {
     if obj.envelope.object_type != PLACE_TYPE || obj.content_type != GEOJSON_MEDIA_TYPE {

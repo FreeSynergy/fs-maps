@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use pmtiles::FileBackend;
 
-use super::pmt::Archive;
+use super::pmt::{Archive, IN_FLIGHT};
 use super::{SourceInfo, TileSource};
 use crate::error::Result;
 
@@ -25,7 +25,7 @@ impl PmtilesFileSource {
         let backend = FileBackend::try_from(path).await?;
         Ok(Self {
             id: format!("file:{}", path.display()),
-            archive: Archive::open(backend).await?,
+            archive: Archive::open(backend, IN_FLIGHT).await?,
         })
     }
 }

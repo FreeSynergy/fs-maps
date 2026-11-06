@@ -50,6 +50,11 @@ fn a_program_refuses_what_it_cannot_serve_with_the_right_code() {
         "https://tile.openstreetmap.org/x.pmtiles",
     );
     assert_eq!(code(&[], &[forbidden]), Some(1));
+    let user = (
+        "FS_MAPS_TILES_URL",
+        "https://me:secret@example.invalid/a.pmtiles",
+    );
+    assert_eq!(code(&[], &[user]), Some(1));
     let dotted = (
         "FS_MAPS_TILES_URL",
         "https://tile.openstreetmap.org./x.pmtiles",

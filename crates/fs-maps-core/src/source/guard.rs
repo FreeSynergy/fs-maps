@@ -3,6 +3,7 @@
 //! Pattern: Decorator over `AsyncBackend` — refuses a read larger than a tile may be, before it
 //! happens, and tries every directory with a limit before the reader decompresses it without one.
 //! The reader keeps the layout of the archive to itself, so it is read here from the fixed v3 header.
+//! A read of another version is refused here, first of all.
 
 use std::io;
 use std::sync::{Arc, OnceLock};
@@ -109,6 +110,13 @@ impl<B: AsyncBackend + Sync + Send> AsyncBackend for Guarded<B> {
             return Err(too_large());
         }
         let response = self.inner.read(offset, length).await?;
+        // Bytes of another version are not the bytes this directory points at: say so before
+        // anything tries to read them, or the failure looks like a broken archive.
+        if let (Some(first), Some(now)) = (self.facts.version.get(), &response.data_version_string)
+            && first != now
+        {
+            return Err(PmtError::SourceModified);
+        }
         if offset == 0 {
             self.first_read(&response).await?;
         } else if let Some(layout) = self.facts.layout.get()
