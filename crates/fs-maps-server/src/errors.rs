@@ -30,12 +30,12 @@ pub(crate) fn rpc_error(e: Error) -> capnp::Error {
         Error::Pmtiles(_) | Error::Http(_) | Error::Io { .. } => {
             Problem::new(SOURCE_FAILED, "The tile source failed", text, 502).into_error()
         }
-        Error::Store(e) => store_error(e, text),
+        Error::Store(e) => store_error(&e, text),
         Error::Cancelled => failed(text),
     }
 }
 
-fn store_error(e: fs_store::Error, text: String) -> capnp::Error {
+fn store_error(e: &fs_store::Error, text: String) -> capnp::Error {
     match e {
         fs_store::Error::NotFound(_) => not_found(text),
         fs_store::Error::Invalid(_) => invalid(text),
@@ -81,8 +81,14 @@ mod tests {
         assert_eq!(status(fs_store::Error::NotFound(id).into()), Some(404));
         let conflict = fs_store::Error::Conflict("x".into());
         assert_eq!(status(conflict.into()), Some(409));
-        assert_eq!(status(fs_store::Error::OriginalImmutable(id).into()), Some(409));
-        assert_eq!(status(fs_store::Error::Invalid("x".into()).into()), Some(422));
+        assert_eq!(
+            status(fs_store::Error::OriginalImmutable(id).into()),
+            Some(409)
+        );
+        assert_eq!(
+            status(fs_store::Error::Invalid("x".into()).into()),
+            Some(422)
+        );
         assert_eq!(status(fs_store::Error::Backend("x".into()).into()), None);
         assert_eq!(status(Error::Cancelled), None);
     }

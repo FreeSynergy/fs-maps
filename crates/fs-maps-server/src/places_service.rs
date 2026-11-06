@@ -11,7 +11,7 @@ use fs_interfaces::places_capnp::places;
 use fs_interfaces::rpc::unsupported;
 use fs_maps_core::{Paging, PlaceFeed, Places};
 
-use crate::errors::rpc_error;
+use crate::errors::{invalid, rpc_error};
 use crate::feed::subscribe;
 use crate::wire::{CONTRACT_VERSION, read_area, read_feature, read_id, write_page, write_place};
 
@@ -117,7 +117,7 @@ impl places::Server for PlacesImpl {
         mut results: places::FindByNameResults,
     ) -> Done {
         let p = params.get()?;
-        let term = p.get_term()?.to_str().map_err(rpc_utf8)?;
+        let term = p.get_term()?.to_str().map_err(|e| invalid(e.to_string()))?;
         let all = self.places.find_by_name(term, WHOLE_LIST).await;
         write_page(
             results.get().init_page(),
@@ -144,8 +144,4 @@ impl places::Server for PlacesImpl {
         results.get().set_subscription(subscription);
         Ok(())
     }
-}
-
-fn rpc_utf8(e: std::str::Utf8Error) -> capnp::Error {
-    crate::errors::invalid(e.to_string())
 }

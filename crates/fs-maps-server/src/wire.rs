@@ -1,10 +1,12 @@
 //! Places, boxes, ids and pages on the wire.
 //!
-//! Pattern: Adapter — `StoredObject`, `Area` and ids between Rust and `places.capnp`. The GeoJSON
+//! Pattern: Adapter — `StoredObject`, `Area` and ids between Rust and `places.capnp`. The `GeoJSON`
 //! stays authoritative for the content; the envelope is the routing summary. Whatever comes in
 //! malformed is a typed `invalid`, and nothing goes out that would not fit one message.
 
-use fs_interfaces::rpc::{DEFAULT_PAGE_SIZE, MAX_PAGE_BYTES, Page, read_object_id, write_envelope};
+use fs_interfaces::rpc::{
+    DEFAULT_PAGE_SIZE, MAX_MESSAGE_BYTES, MAX_PAGE_BYTES, Page, read_object_id, write_envelope,
+};
 use fs_interfaces::{common_capnp, places_capnp};
 use fs_maps_core::Area;
 use fs_maps_core::places::feature_from_place;
@@ -16,7 +18,7 @@ use crate::errors::{invalid, rpc_error, too_large};
 /// The version `supportReport` names.
 pub(crate) const CONTRACT_VERSION: &str = "places 0.1 (draft)";
 
-/// Room for what a place adds to its GeoJSON: envelope ids, times, IRIs, framing.
+/// Room for what a place adds to its `GeoJSON`: envelope ids, times, IRIs, framing.
 const ENVELOPE_ROOM: usize = 4096;
 
 /// What a place weighs in a message. The name comes twice: envelope, and `properties` if missing.
@@ -24,13 +26,14 @@ fn weight(place: &StoredObject) -> usize {
     place.content.to_string().len() + 2 * place.envelope.name.len() + ENVELOPE_ROOM
 }
 
-/// Write one place.
+/// Write one place. What [`read_feature`] let in always fits: its `GeoJSON` and a name of at most the
+/// same size. Only a place from another writer of the store can be refused here.
 pub(crate) fn write_place(
     mut out: places_capnp::place::Builder<'_>,
     place: &StoredObject,
 ) -> capnp::Result<()> {
     let geojson = feature_from_place(place).map_err(rpc_error)?.to_string();
-    if geojson.len() + place.envelope.name.len() + ENVELOPE_ROOM > MAX_PAGE_BYTES {
+    if geojson.len() + place.envelope.name.len() + ENVELOPE_ROOM > MAX_MESSAGE_BYTES {
         return Err(too_large(format!(
             "place {} does not fit one message",
             place.envelope.id
@@ -41,17 +44,19 @@ pub(crate) fn write_place(
     Ok(())
 }
 
-/// Read the GeoJSON text of a request; the core validates the feature. What could not be answered
-/// once stored is refused here.
+/// Read the `GeoJSON` text of a request; the core validates the feature. Measured as it will be
+/// stored and answered, not as it came: `1E5` grows to `100000.0`. What could not be answered once
+/// stored is refused here.
 pub(crate) fn read_feature(text: capnp::text::Reader<'_>) -> capnp::Result<Value> {
     let text = text.to_str().map_err(|e| invalid(e.to_string()))?;
-    if text.len() + 2 * ENVELOPE_ROOM > MAX_PAGE_BYTES {
+    let feature: Value = serde_json::from_str(text).map_err(|e| invalid(e.to_string()))?;
+    let stored = feature.to_string().len();
+    if stored + 2 * ENVELOPE_ROOM > MAX_PAGE_BYTES {
         return Err(too_large(format!(
-            "{} bytes of GeoJSON, a place may have up to {MAX_PAGE_BYTES}",
-            text.len()
+            "{stored} bytes of GeoJSON, a place may have up to {MAX_PAGE_BYTES}"
         )));
     }
-    serde_json::from_str(text).map_err(|e| invalid(e.to_string()))
+    Ok(feature)
 }
 
 /// Read an id: a missing or malformed one is the request's fault.
@@ -75,8 +80,8 @@ pub(crate) fn write_page(
     cursor: capnp::Result<common_capnp::cursor::Reader<'_>>,
 ) -> capnp::Result<()> {
     let opaque = cursor?.get_opaque()?;
-    let page = Page::of_weighted(all, opaque, DEFAULT_PAGE_SIZE, weight)
-        .map_err(|e| invalid(e.extra))?;
+    let page =
+        Page::of_weighted(all, opaque, DEFAULT_PAGE_SIZE, weight).map_err(|e| invalid(e.extra))?;
     let length = u32::try_from(page.items.len()).map_err(|_| too_large("list too long"))?;
     let mut items = out.reborrow().init_items(length);
     for (i, place) in (0u32..).zip(&page.items) {

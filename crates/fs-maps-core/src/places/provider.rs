@@ -2,7 +2,9 @@
 //!
 //! Pattern: Facade + Observer — [`PlaceRepository`] borrows its store, so it cannot live behind an
 //! `Arc<dyn Places>`; this one owns an `Arc<dyn Store>`, runs each call through a repository and
-//! tells the listeners what was committed. A write that failed tells nobody.
+//! tells the listeners what was committed. A write that failed tells nobody. Writes run one at a
+//! time: an update reads, then writes; a delete between the two would otherwise be undone by it, and
+//! the listeners hear the changes in the order they were committed.
 
 use std::sync::Arc;
 
@@ -10,6 +12,7 @@ use async_trait::async_trait;
 use fs_interfaces::Capabilities;
 use fs_store::{ObjectId, Store, StoredObject};
 use serde_json::Value;
+use tokio::sync::Mutex;
 
 use super::book::offered;
 use super::bounds::Area;
@@ -24,6 +27,7 @@ use crate::error::Result;
 pub struct StorePlaces {
     store: Arc<dyn Store>,
     feed: Arc<Registry>,
+    writes: Arc<Mutex<()>>,
     actor: String,
     instance: Option<String>,
 }
@@ -34,6 +38,7 @@ impl StorePlaces {
         Self {
             store,
             feed: Arc::default(),
+            writes: Arc::default(),
             actor: actor.into(),
             instance: None,
         }
@@ -75,18 +80,21 @@ impl Places for StorePlaces {
         Places::list(&self.repository(&view), page).await
     }
     async fn create(&self, feature: &Value) -> Result<StoredObject> {
+        let _one_at_a_time = self.writes.lock().await;
         let view = self.view();
         let place = Places::create(&self.repository(&view), feature).await?;
         self.feed.notify(&PlaceChange::Created(place.envelope.id));
         Ok(place)
     }
     async fn update(&self, id: ObjectId, feature: &Value) -> Result<StoredObject> {
+        let _one_at_a_time = self.writes.lock().await;
         let view = self.view();
         let place = Places::update(&self.repository(&view), id, feature).await?;
         self.feed.notify(&PlaceChange::Updated(id));
         Ok(place)
     }
     async fn delete(&self, id: ObjectId) -> Result<()> {
+        let _one_at_a_time = self.writes.lock().await;
         let view = self.view();
         Places::delete(&self.repository(&view), id).await?;
         self.feed.notify(&PlaceChange::Deleted(id));

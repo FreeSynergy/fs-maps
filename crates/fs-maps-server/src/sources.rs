@@ -14,9 +14,9 @@ use fs_maps_core::{
 /// Where tiles come from.
 #[derive(Clone, Debug, Default)]
 pub struct TileConfig {
-    /// Local PMTiles files, for example region packages; asked first.
+    /// Local `PMTiles` files, for example region packages; asked first.
     pub files: Vec<PathBuf>,
-    /// A remote PMTiles archive, opened at the first tile that needs it.
+    /// A remote `PMTiles` archive, opened at the first tile that needs it.
     pub url: Option<String>,
     /// The User-Agent of the remote requests (mandatory for a URL, see the usage policy).
     pub user_agent: String,
@@ -38,7 +38,7 @@ fn remote(url: &str, config: &TileConfig) -> Result<Arc<dyn TileSource>> {
 /// Open what `config` names.
 ///
 /// # Errors
-/// A file cannot be read as PMTiles, the usage policy forbids the URL, or the cache cannot be opened.
+/// A file cannot be read as `PMTiles`, the usage policy forbids the URL, or the cache cannot be opened.
 /// An unreachable URL is not an error here: the program also works offline.
 pub async fn open_tiles(config: &TileConfig) -> Result<Arc<dyn TileSource>> {
     let mut chain: Vec<Arc<dyn TileSource>> = Vec::new();

@@ -13,7 +13,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use capnp::any_pointer;
-use capnp::capability::{self, Client, DispatchCallResult, FromClientHook, FromServer, Params, Results};
+use capnp::capability::{
+    self, Client, DispatchCallResult, FromClientHook, FromServer, Params, Results,
+};
 use capnp::private::capability::ClientHook;
 use capnp::traits::HasTypeId;
 use capnp_rpc::new_client;

@@ -44,11 +44,11 @@ impl tile_source::Server for TilesImpl {
         params: tile_source::TileParams,
         mut results: tile_source::TileResults,
     ) -> Done {
-        let p = params.get()?;
-        let (z, x, y) = (p.get_z(), p.get_x(), p.get_y());
+        let request = params.get()?;
+        let (z, x, y) = (request.get_z(), request.get_x(), request.get_y());
         let found = self.source.get_tile(z, x, y).await.map_err(rpc_error)?;
-        let mut r = results.get();
-        r.set_found(found.is_some());
+        let mut answer = results.get();
+        answer.set_found(found.is_some());
         if let Some(mvt) = found {
             if mvt.len() > MAX_PAGE_BYTES {
                 return Err(too_large(format!(
@@ -56,7 +56,7 @@ impl tile_source::Server for TilesImpl {
                     mvt.len()
                 )));
             }
-            r.set_mvt(&mvt);
+            answer.set_mvt(&mvt);
         }
         Ok(())
     }

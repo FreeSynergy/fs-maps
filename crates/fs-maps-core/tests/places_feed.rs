@@ -33,7 +33,10 @@ async fn committed_writes_are_told_until_the_subscription_ends() {
 
     let id = places.create(&point("Berlin", 13.4, 52.5)).await.unwrap();
     let id = id.envelope.id;
-    places.update(id, &point("Berlin", 13.5, 52.5)).await.unwrap();
+    places
+        .update(id, &point("Berlin", 13.5, 52.5))
+        .await
+        .unwrap();
     places.delete(id).await.unwrap();
     let expected = [
         PlaceChange::Created(id),
@@ -71,7 +74,10 @@ async fn it_answers_every_method_and_reports_the_feed() {
     let area = Area::new(13.0, 52.0, 14.0, 53.0).unwrap();
     let found = places.within(&area, Paging::default()).await.unwrap();
     assert_eq!(found.len(), 1);
-    let named = places.find_by_name("berl", Paging::default()).await.unwrap();
+    let named = places
+        .find_by_name("berl", Paging::default())
+        .await
+        .unwrap();
     assert_eq!(named.len(), 1);
     assert!(places.capabilities().is_supported("place.subscribe"));
 }
@@ -81,4 +87,22 @@ async fn no_source_says_not_possible() {
     let e = NoSource.get_tile(0, 0, 0).await.unwrap_err();
     assert!(matches!(e, Error::Unsupported(_)), "{e:?}");
     assert!(!NoSource.capabilities().is_supported("tile.read"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_update_never_brings_a_deleted_place_back() {
+    let places = provider().await;
+    for _ in 0..200 {
+        let created = places.create(&point("x", 1.0, 1.0)).await.unwrap();
+        let id = created.envelope.id;
+        let (a, b) = (places.clone(), places.clone());
+        let update = tokio::spawn(async move { a.update(id, &point("y", 2.0, 2.0)).await });
+        let delete = tokio::spawn(async move { b.delete(id).await });
+        let (updated, deleted) = (update.await.unwrap(), delete.await.unwrap());
+        assert!(deleted.is_ok(), "{deleted:?}");
+        if let Err(e) = updated {
+            assert!(matches!(e, Error::NotFound(_)), "{e:?}");
+        }
+        assert!(places.get(id).await.unwrap().is_none(), "it came back");
+    }
 }
