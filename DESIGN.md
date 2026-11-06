@@ -7,7 +7,7 @@ Evidence for all policy decisions: `RESEARCH.md` (2026-11-05). Decisions: ADR 00
 
 ## State
 
-Version 0.1.0 (local only, never pushed).
+Version 0.1.0 (local only, never pushed). ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests: the 29 of before + 1 policy URL test).
 
 | Area | State |
 |---|---|
@@ -17,11 +17,38 @@ Version 0.1.0 (local only, never pushed).
 | `FallbackSource` (region packages first, then cache+network), `MemorySource` | done |
 | `TileCache`: disk, hard byte limit, LRU (recency persisted via mtime), 7-day TTL, atomic writes, rescan on open | done, model-based property test against a reference LRU |
 | `CachedSource<S>` wrapper | done |
-| `RegionDownload`: exact tile count + sampled size estimate before download, tile limit (200 000), progress + cancel callback, writes a **PMTiles v3 package** (MVT, gzip, Hilbert order, bounds/metadata/attribution) via the `pmtiles` writer | done |
-| `places`: GeoJSON `Feature` <-> `fs-store` `StoredObject` (type `Place`, `application/geo+json`, name from `properties.name`/`name:en`/`name:*`/`title`, index `geometry_type`, `bbox`, `geo`) | done, tested incl. real `TursoStore` |
+| `RegionDownload` (Facade; `DownloadCommand`, `TilePlan` iterator, `ProgressObserver`): exact tile count + sampled size estimate before download, tile limit (200 000), progress + cancel callback, writes a **PMTiles v3 package** (MVT, gzip, Hilbert order, bounds/metadata/attribution) via the `pmtiles` writer | done |
+| `places`: `PlaceRepository` over `ObjectRepository` + GeoJSON `Feature` <-> `fs-store` `StoredObject` (type `Place`, `application/geo+json`, name from `properties.name`/`name:en`/`name:*`/`title`, index `geometry_type`, `bbox`, `geo`) | done, tested incl. real `TursoStore` |
 | `geouri`: RFC 5870 `geo:` parse/format (crs=wgs84, `u=`, extra params, pole/antimeridian normalisation) | done |
 | Example `fetch_tiles` | done (loopback fixture by default) |
 | GUI, MVT decoding/rendering, styles, geocoding/search, routing | **not started** (see RESEARCH.md section 5) |
+
+## Structure and pattern map (ADR 0043)
+
+Every file is one concept, <= 200 lines (tests included; tests live in `tests/<feature>.rs`), `lib.rs`/`mod.rs` only
+declare and re-export, every module doc has a `Pattern:` line. Callers depend on the `TileSource` trait.
+
+| Module | Pattern | Why |
+|---|---|---|
+| `source/tile_source.rs` | Strategy | `TileSource` is the one interface for "where tiles come from" |
+| `source/{file,http,pmt}.rs` | Adapter | the `pmtiles` reader (file / HTTP range) behind `TileSource` |
+| `source/policy.rs` | Strategy (validation rules) | OSMF host ban, scheme, User-Agent checked before any request |
+| `source/memory.rs` | Strategy implementation | simplest source, tests and tiny maps |
+| `source/fallback.rs` | Chain of Responsibility | region packages first, then cache + network; first hit wins |
+| `cache/cached.rs` | Decorator | `CachedSource<S>` is a `TileSource` wrapping another one |
+| `cache/{tile_cache,maintenance}.rs` | Repository / Strategy (LRU) | get/put/clear by key; eviction policy in its own file |
+| `cache/index.rs`, `cache/disk.rs` | Repository (internal) / Adapter | in-memory LRU index; file layout and atomic writes |
+| `cache/{config,stats}.rs` | Value objects | plain data |
+| `region/download.rs` | Facade | `RegionDownload`: estimate + download behind two calls |
+| `region/command.rs` | Command | `DownloadCommand::run` carries source, region, plan, target; cleans up on error/cancel |
+| `region/plan.rs` | Iterator | tiles in Hilbert (TileID) order, as the clustered PMTiles archive needs |
+| `region/observer.rs` | Observer | `ProgressObserver` (closures work too); returning `false` cancels |
+| `region/estimate.rs` | Strategy consumer | pure function over a plan and a `dyn TileSource` |
+| `places/adapter.rs` | Adapter | GeoJSON `Feature` <-> `StoredObject` (type `Place`) |
+| `places/repository.rs` | Repository over Store | `PlaceRepository` depends on `fs_store::traits::ObjectRepository` only |
+| `places/{geometry,name}.rs` | Interpreter-style recursion / Strategy | geometry validation; name fallback order |
+| `tile/*`, `geouri.rs` | Newtype / Parser | validated `Tile`, `BBox`, `GeoUri` |
+| `testutil/*` | Fake | loopback range server + PMTiles fixture |
 
 ## Policy rules built in
 
@@ -67,5 +94,5 @@ file mtime so the order survives restarts). One process owns a cache dir (no cro
 
 ## Tests
 
-`cargo test`: unit tests per module, property tests (cache limit + LRU model, `geo:` roundtrip), integration test
+`cargo test`: tests by feature in `tests/` (`cache`, `cache_model`, `region`, `source`, `places`, `http_fixture`), unit tests next to `tile`, `geouri`, `source/policy`; property tests (cache limit + LRU model, `geo:` roundtrip), integration test
 `tests/http_fixture.rs` (loopback range server, cache, region download, offline chain). Nothing contacts a public server.

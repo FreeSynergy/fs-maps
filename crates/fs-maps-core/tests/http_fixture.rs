@@ -9,7 +9,8 @@ use fs_maps_core::{
     RegionDownload, RegionSpec, TileCache, TileSource,
 };
 
-const UA: &str = "FreeSynergy-Maps-test/0.1 (+https://freesynergy.example; contact: test@example.org)";
+const UA: &str =
+    "FreeSynergy-Maps-test/0.1 (+https://freesynergy.example; contact: test@example.org)";
 
 #[tokio::test]
 async fn http_source_range_requests_cache_and_region() {
@@ -21,7 +22,10 @@ async fn http_source_range_requests_cache_and_region() {
 
     let http = PmtilesHttpSource::open(&server.url, UA).await.unwrap();
     let after_open = server.requests.load(Ordering::SeqCst);
-    assert!(after_open <= 2, "open = header+root dir only, got {after_open}");
+    assert!(
+        after_open <= 2,
+        "open = header+root dir only, got {after_open}"
+    );
     let info = http.info().unwrap();
     assert_eq!((info.min_zoom, info.max_zoom), (0, 6));
 
@@ -34,7 +38,8 @@ async fn http_source_range_requests_cache_and_region() {
     assert!(server.user_agents.lock().unwrap().iter().all(|u| u == UA));
 
     // through the cache: second read costs no request
-    let cache = Arc::new(TileCache::open(CacheConfig::new(dir.path().join("cache"), 64 * 1024)).unwrap());
+    let cache =
+        Arc::new(TileCache::open(CacheConfig::new(dir.path().join("cache"), 64 * 1024)).unwrap());
     let cached = CachedSource::new(http, cache.clone());
     cached.get_tile(5, 3, 4).await.unwrap().unwrap();
     let n = server.requests.load(Ordering::SeqCst);
@@ -51,7 +56,11 @@ async fn http_source_range_requests_cache_and_region() {
         max_zoom: 4,
         attribution: Some("© OpenStreetMap contributors".into()),
     };
-    let rd = RegionDownload::new(Arc::new(PmtilesHttpSource::open(&server.url, UA).await.unwrap()), spec).unwrap();
+    let rd = RegionDownload::new(
+        Arc::new(PmtilesHttpSource::open(&server.url, UA).await.unwrap()),
+        spec,
+    )
+    .unwrap();
     let est = rd.estimate(5).await.unwrap();
     assert!(est.tiles > 0 && est.avg_tile_bytes > 200);
     let out = dir.path().join("mini.pmtiles");

@@ -32,7 +32,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source = PmtilesHttpSource::open(&url, UA).await?;
     println!("source info: {:?}", source.info());
     // 16 KiB cache: small on purpose, to show eviction
-    let cache = Arc::new(TileCache::open(CacheConfig::new(tmp.join("cache"), 16 * 1024))?);
+    let cache = Arc::new(TileCache::open(CacheConfig::new(
+        tmp.join("cache"),
+        16 * 1024,
+    ))?);
     let cached = CachedSource::new(source, cache.clone());
 
     // the area: central Berlin, zoom 8..=8 plus neighbours
@@ -60,7 +63,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let rd = RegionDownload::new(Arc::new(PmtilesHttpSource::open(&url, UA).await?), spec)?;
     let est = rd.estimate(4).await?;
-    println!("region: {} tiles, ~{} bytes uncompressed", est.tiles, est.est_bytes);
+    println!(
+        "region: {} tiles, ~{} bytes uncompressed",
+        est.tiles, est.est_bytes
+    );
     let out = tmp.join("berlin.pmtiles");
     let rep = rd
         .download(&out, &mut |p| {
@@ -70,7 +76,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             true
         })
         .await?;
-    println!("package {:?}: {} tiles, {} bytes on disk", rep.path, rep.tiles_written, rep.file_bytes);
+    println!(
+        "package {:?}: {} tiles, {} bytes on disk",
+        rep.path, rep.tiles_written, rep.file_bytes
+    );
     std::fs::remove_dir_all(&tmp)?;
     Ok(())
 }

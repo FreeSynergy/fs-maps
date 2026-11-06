@@ -3,16 +3,22 @@
 //! Only the default CRS `wgs84` is supported (RFC 5870 defines no other). Scheme and parameter
 //! names are case-insensitive. At the poles (|lat| = 90) the longitude is normalised to 0, and
 //! longitude -180 to 180, as the RFC prescribes for comparison.
+//!
+//! Pattern: Newtype + Parser — `GeoUri` is a validated value with `FromStr`/`Display` (parse, don't validate).
 
 use std::fmt;
 use std::str::FromStr;
 
 use crate::error::{Error, Result};
 
+/// A parsed `geo:` URI.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GeoUri {
+    /// Latitude, degrees.
     pub lat: f64,
+    /// Longitude, degrees.
     pub lon: f64,
+    /// Altitude in metres.
     pub alt: Option<f64>,
     /// Uncertainty in metres (`;u=`).
     pub uncertainty: Option<f64>,
@@ -27,20 +33,30 @@ fn bad<T>(msg: impl Into<String>) -> Result<T> {
 /// RFC 5870 number: `[-]digits[.digits]` (a leading `+` is not allowed).
 fn num(s: &str, what: &str) -> Result<f64> {
     let body = s.strip_prefix('-').unwrap_or(s);
-    let (int, frac) = body.split_once('.').map_or((body, None), |(a, b)| (a, Some(b)));
+    let (int, frac) = body
+        .split_once('.')
+        .map_or((body, None), |(a, b)| (a, Some(b)));
     let digits = |t: &str| !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit());
     if !digits(int) || frac.is_some_and(|f| !digits(f)) {
         return bad(format!("{what} is not a number: {s:?}"));
     }
-    s.parse::<f64>().or_else(|_| bad(format!("{what} out of range: {s:?}")))
+    s.parse::<f64>()
+        .or_else(|_| bad(format!("{what} out of range: {s:?}")))
 }
 
 impl GeoUri {
+    /// Validated constructor (WGS84 ranges, pole/antimeridian normalisation).
     pub fn new(lat: f64, lon: f64) -> Result<Self> {
         Self::build(lat, lon, None, None, vec![])
     }
 
-    fn build(lat: f64, lon: f64, alt: Option<f64>, u: Option<f64>, params: Vec<(String, Option<String>)>) -> Result<Self> {
+    fn build(
+        lat: f64,
+        lon: f64,
+        alt: Option<f64>,
+        u: Option<f64>,
+        params: Vec<(String, Option<String>)>,
+    ) -> Result<Self> {
         if !lat.is_finite() || !(-90.0..=90.0).contains(&lat) {
             return bad(format!("latitude {lat} outside -90..90"));
         }
@@ -66,8 +82,13 @@ impl GeoUri {
         })
     }
 
+    /// Parse a `geo:` URI string.
     pub fn parse(s: &str) -> Result<Self> {
-        let Some(rest) = s.get(..4).filter(|p| p.eq_ignore_ascii_case("geo:")).map(|_| &s[4..]) else {
+        let Some(rest) = s
+            .get(..4)
+            .filter(|p| p.eq_ignore_ascii_case("geo:"))
+            .map(|_| &s[4..])
+        else {
             return bad("missing geo: scheme");
         };
         let mut parts = rest.split(';');
@@ -144,7 +165,10 @@ mod tests {
         assert_eq!(g.uncertainty, Some(40.0));
         assert_eq!(g.to_string(), "geo:48.198634,16.371648;u=40");
         // equality rules: poles and +-180
-        assert_eq!(GeoUri::parse("geo:90,-22.43;crs=WGS84").unwrap(), GeoUri::parse("geo:90,46").unwrap());
+        assert_eq!(
+            GeoUri::parse("geo:90,-22.43;crs=WGS84").unwrap(),
+            GeoUri::parse("geo:90,46").unwrap()
+        );
         assert_eq!(GeoUri::parse("geo:22.3,-118").unwrap().lon, -118.0);
         assert_eq!(GeoUri::parse("GEO:0,-180").unwrap().lon, 180.0);
         // unknown parameter kept
@@ -155,9 +179,23 @@ mod tests {
     #[test]
     fn rejects_garbage() {
         for s in [
-            "", "geo:", "geo:1", "geo:1,2,3,4", "geo:a,b", "geo:91,0", "geo:0,181", "geo:+1,2",
-            "geo:1.,2", "geo:.5,2", "geo:1,2;crs=epsg:4326", "geo:1,2;u", "geo:1,2;u=-3", "geo:1,2;;",
-            "http://x", "geo:1,2;=x", "geo:1,2;a b=c",
+            "",
+            "geo:",
+            "geo:1",
+            "geo:1,2,3,4",
+            "geo:a,b",
+            "geo:91,0",
+            "geo:0,181",
+            "geo:+1,2",
+            "geo:1.,2",
+            "geo:.5,2",
+            "geo:1,2;crs=epsg:4326",
+            "geo:1,2;u",
+            "geo:1,2;u=-3",
+            "geo:1,2;;",
+            "http://x",
+            "geo:1,2;=x",
+            "geo:1,2;a b=c",
         ] {
             assert!(GeoUri::parse(s).is_err(), "{s:?} should fail");
         }
