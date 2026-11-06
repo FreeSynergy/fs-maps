@@ -22,12 +22,6 @@ struct Held {
 pub(super) struct BoundedDirectories(Mutex<Held>);
 
 impl BoundedDirectories {
-    fn found(&self, offset: u64, tile_id: TileId) -> Option<Option<DirEntry>> {
-        let held = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        let directory = held.directories.get(&offset)?;
-        Some(directory.find_tile_id(tile_id).copied())
-    }
-
     fn keep(&self, offset: u64, directory: Directory) {
         let size = directory.get_approx_byte_size();
         if size > BUDGET_BYTES {
@@ -58,8 +52,11 @@ impl DirectoryCache for BoundedDirectories {
         tile_id: TileId,
         fetcher: impl Future<Output = PmtResult<Directory>> + Send,
     ) -> PmtResult<Option<DirEntry>> {
-        if let Some(entry) = self.found(offset, tile_id) {
-            return Ok(entry);
+        {
+            let held = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(directory) = held.directories.get(&offset) {
+                return Ok(directory.find_tile_id(tile_id).copied());
+            }
         }
         let directory = fetcher.await?;
         let entry = directory.find_tile_id(tile_id).copied();
