@@ -699,15 +699,15 @@ dependencies = [
 
 [[package]]
 name = "fs-interfaces"
-version = "0.4.0"
-source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.4.0#faddd65d7e7d77a87736172b749abdb90980d290"
+version = "0.5.0"
+source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.5.0#a3573feb6e858423d2ad93bacd21b73c57355b4a"
 dependencies = [
  "capnp",
 ]
 
 [[package]]
 name = "fs-maps-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "bytes",
