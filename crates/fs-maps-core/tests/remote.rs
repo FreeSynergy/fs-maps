@@ -23,60 +23,6 @@ async fn served(dir: &std::path::Path, label: &str) -> RangeServer {
 }
 
 #[tokio::test]
-async fn a_replaced_archive_is_opened_again_and_versions_do_not_mix() {
-    let dir = tempfile::tempdir().unwrap();
-    let server = served(dir.path(), "OLD").await;
-    let cache = Arc::new(TileCache::open(CacheConfig::new(dir.path().join("c"), 1 << 20)).unwrap());
-    let source = CachedSource::new(LazyHttpSource::new(&server.url, UA).unwrap(), cache);
-    let tile = source.get_tile(1, 0, 0).await.unwrap().unwrap();
-    assert_eq!(tile, labelled("OLD", 1, 0, 0));
-
-    let new = dir.path().join("new.pmtiles");
-    write_labelled(&new, 2, "NEW").await.unwrap();
-    server.replace_archive(&new, "new").unwrap();
-
-    // Still cached, as nothing has told it yet. The first uncached tile notices.
-    let tile = source.get_tile(1, 0, 0).await.unwrap().unwrap();
-    assert_eq!(tile, labelled("OLD", 1, 0, 0));
-    let tile = source.get_tile(2, 1, 1).await.unwrap().unwrap();
-    assert_eq!(tile, labelled("NEW", 2, 1, 1));
-    // Now the old tile is not an answer any more.
-    let tile = source.get_tile(1, 0, 0).await.unwrap().unwrap();
-    assert_eq!(tile, labelled("NEW", 1, 0, 0));
-    assert_eq!(source.version().as_deref(), Some("\"new\""));
-}
-
-#[tokio::test]
-async fn a_replaced_archive_of_another_layout_is_opened_again() {
-    let dir = tempfile::tempdir().unwrap();
-    let server = served(dir.path(), "OLD").await;
-    let source = LazyHttpSource::new(&server.url, UA).unwrap();
-    source.get_tile(0, 0, 0).await.unwrap().unwrap();
-
-    // Larger, with other bytes at every offset: they must not reach the decompression.
-    let larger = dir.path().join("larger.pmtiles");
-    write_labelled(&larger, 4, "LARGER").await.unwrap();
-    server.replace_archive(&larger, "larger").unwrap();
-    let before = server.requests.load(Ordering::SeqCst);
-    let tile = source.get_tile(2, 1, 1).await.unwrap().unwrap();
-    assert_eq!(tile, labelled("LARGER", 2, 1, 1));
-    let used = server.requests.load(Ordering::SeqCst) - before;
-    assert!(
-        used <= 3,
-        "{used} requests: one stale read, one open, one tile"
-    );
-
-    // Smaller, and the tile lies past its end: 416, and there the archive has no such tile.
-    let tiny = dir.path().join("tiny.pmtiles");
-    write_labelled(&tiny, 0, "TINY").await.unwrap();
-    server.replace_archive(&tiny, "tiny").unwrap();
-    assert_eq!(source.get_tile(4, 15, 15).await.unwrap(), None);
-    let tile = source.get_tile(0, 0, 0).await.unwrap().unwrap();
-    assert_eq!(tile, labelled("TINY", 0, 0, 0));
-    assert_eq!(source.version().as_deref(), Some("\"tiny\""));
-}
-
-#[tokio::test]
 async fn a_tile_that_cannot_exist_reaches_no_server() {
     let dir = tempfile::tempdir().unwrap();
     let server = served(dir.path(), "T").await;

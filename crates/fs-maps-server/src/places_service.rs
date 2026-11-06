@@ -12,13 +12,15 @@ use std::sync::Arc;
 use capnp_rpc::new_client;
 use fs_interfaces::Unsupported;
 use fs_interfaces::places_capnp::{places, tile_source};
-use fs_interfaces::rpc::{invalid_request, read_object_id, unsupported};
+use fs_interfaces::rpc::{check_answer, invalid_request, read_object_id, run_to_end, unsupported};
 use fs_maps_core::{Paging, PlaceFeed, Places, TileSource};
 
 use crate::errors::rpc_error;
 use crate::feed::subscribe;
 use crate::tiles_service::TilesImpl;
-use crate::wire::{CONTRACT_VERSION, read_area, read_feature, read_term, write_page, write_place};
+use crate::wire::{
+    CONTRACT_VERSION, read_area, read_feature, read_term, weight, write_page, write_place,
+};
 
 const SUBSCRIBE: &str = "place.subscribe";
 
@@ -75,7 +77,10 @@ impl places::Server for MapsServer {
         mut results: places::CreateResults,
     ) -> Done {
         let feature = read_feature(params.get()?.get_geojson()?)?;
-        let place = self.places.create(&feature).await.map_err(rpc_error)?;
+        let places = self.places.clone();
+        let place = run_to_end(async move { places.create(&feature).await })
+            .await?
+            .map_err(rpc_error)?;
         write_place(results.get().init_place(), &place)
     }
 
@@ -87,7 +92,10 @@ impl places::Server for MapsServer {
         let p = params.get()?;
         let id = read_object_id(p.get_id()?)?;
         let feature = read_feature(p.get_geojson()?)?;
-        let place = self.places.update(id, &feature).await.map_err(rpc_error)?;
+        let places = self.places.clone();
+        let place = run_to_end(async move { places.update(id, &feature).await })
+            .await?
+            .map_err(rpc_error)?;
         write_place(results.get().init_place(), &place)
     }
 
@@ -97,7 +105,10 @@ impl places::Server for MapsServer {
         _: places::DeleteResults,
     ) -> Done {
         let id = read_object_id(params.get()?.get_id()?)?;
-        self.places.delete(id).await.map_err(rpc_error)
+        let places = self.places.clone();
+        run_to_end(async move { places.delete(id).await })
+            .await?
+            .map_err(rpc_error)
     }
 
     async fn get(
@@ -110,7 +121,10 @@ impl places::Server for MapsServer {
         let mut r = results.get();
         r.set_found(found.is_some());
         match found {
-            Some(place) => write_place(r.init_place(), &place),
+            Some(place) => {
+                check_answer(weight(&place))?;
+                write_place(r.init_place(), &place)
+            }
             None => Ok(()),
         }
     }

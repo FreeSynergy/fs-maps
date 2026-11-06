@@ -5,8 +5,7 @@
 //! is refused, and nothing is let in that could not come back: it would block paging forever.
 
 use fs_interfaces::rpc::{
-    DEFAULT_PAGE_SIZE, Page, check_answer, check_intake, envelope_weight, invalid_request,
-    write_envelope,
+    DEFAULT_PAGE_SIZE, Page, check_intake, envelope_weight, invalid_request, write_envelope,
 };
 use fs_interfaces::{common_capnp, places_capnp};
 use fs_maps_core::Area;
@@ -22,12 +21,13 @@ pub(crate) const CONTRACT_VERSION: &str = "places 0.1 (draft)";
 /// Room for what a place adds to its `GeoJSON` besides its name: ids, times, IRIs, framing.
 const ENVELOPE_ROOM: usize = 4096;
 
-fn weight(place: &StoredObject) -> usize {
+/// What a place weighs in a message.
+pub(crate) fn weight(place: &StoredObject) -> usize {
     place.content.to_string().len() + envelope_weight(&place.envelope)
 }
 
-/// Write one place. What [`read_feature`] let in always fits; a stored place that no longer reads as
-/// one is the store's problem, not the caller's.
+/// Write one place, whose size the caller checked. What [`read_feature`] let in always fits; a stored
+/// place that no longer reads as one is the store's problem, not the caller's.
 pub(crate) fn write_place(
     mut out: places_capnp::place::Builder<'_>,
     place: &StoredObject,
@@ -35,7 +35,6 @@ pub(crate) fn write_place(
     let geojson = feature_from_place(place)
         .map_err(|e| stored_data(&e))?
         .to_string();
-    check_answer(geojson.len() + envelope_weight(&place.envelope))?;
     write_envelope(out.reborrow().init_envelope(), &place.envelope);
     out.set_geojson(geojson.as_str());
     Ok(())

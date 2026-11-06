@@ -106,11 +106,15 @@ fn remote(url: &str, config: &TileConfig) -> fs_maps_core::Result<Arc<dyn TileSo
     Ok(match &config.cache {
         Some(cache) => {
             // It shows where a person looked: the same rule as the data.
-            prepare_data_dir(&cache.dir).map_err(|source| Error::Io {
+            let dir = prepare_data_dir(&cache.dir).map_err(|source| Error::Io {
                 path: cache.dir.clone(),
                 source,
             })?;
-            let cache = Arc::new(TileCache::open(cache.clone())?);
+            let config = CacheConfig {
+                dir,
+                ..cache.clone()
+            };
+            let cache = Arc::new(TileCache::open(config)?);
             Arc::new(CachedSource::new(source, cache))
         }
         None => Arc::new(source),

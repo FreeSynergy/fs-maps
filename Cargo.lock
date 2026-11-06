@@ -793,8 +793,8 @@ dependencies = [
 
 [[package]]
 name = "fs-interfaces"
-version = "0.24.0"
-source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.24.0#8ccb95326d0a693c8db8e0d595fcb740159f9b9d"
+version = "0.32.0"
+source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.32.0#7561c557a45185b9edbc4ccc098c7f84ff58b5d6"
 dependencies = [
  "capnp",
  "capnp-rpc",
@@ -2873,6 +2873,7 @@ dependencies = [
  "futures-core",
  "futures-io",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]

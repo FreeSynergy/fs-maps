@@ -7,7 +7,7 @@ Evidence for all policy decisions: `RESEARCH.md` (2026-11-05). Decisions: ADR 00
 
 ## State
 
-Version 0.2.0: `fs-maps-server`, the contract `places.capnp` over a Unix socket; `StorePlaces`, the owning provider with the live feed; `fs-interfaces` v0.22.0. Before, in 0.1: `Places` is the provider of `places.capnp` (ADR 0045, 0050): trait with every method, `Unsupported` defaults, `Capabilities`; `TileSource` also reports `Capabilities`. Earlier: ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests before the provider work, all unchanged; 46 now).
+Version 0.2.0: `fs-maps-server`, the contract `places.capnp` over a Unix socket; `StorePlaces`, the owning provider with the live feed; `fs-interfaces` v0.32.0. Before, in 0.1: `Places` is the provider of `places.capnp` (ADR 0045, 0050): trait with every method, `Unsupported` defaults, `Capabilities`; `TileSource` also reports `Capabilities`. Earlier: ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests before the provider work, all unchanged; 46 now).
 
 | Area | State |
 |---|---|
@@ -118,7 +118,7 @@ file mtime so the order survives restarts). One process owns a cache dir (no cro
 * **Question to the owner (provisional):** the overlap rule. Today a place matches `within` when the bounding box of its geometry meets the area (an L-shaped polygon matches a box in its empty notch; a geometry over the antimeridian matches everywhere along the latitude band). Exact geometry tests would need a geometry library (ADR 0015) and could not run in the store.
 * **Question to the owner (provisional):** index precision 1e-7 degrees (about 1 cm), rounded outwards, so a place at most 1e-7 degrees outside an area can still match. Raising it would need a wider key.
 * **Decided by the strategy:** `supportReport` is the standard report of this contract; `capabilities` is not added to `places.capnp`.
-* The consumer reaches tiles through `Places.tiles` (`fs-interfaces` v0.24.0): one socket, one root capability.
+* The consumer reaches tiles through `Places.tiles` (`fs-interfaces`): one socket, one root capability.
 * **Provisional:** `TileSource.id` of the `NoSource` answers `none`, not `Unsupported`: the method has no capability id of its own and "none" is true; `supportReport` and `tile` carry the "not possible".
 * **Paging:** the server reads the whole result for each page, as `Page::of_weighted` needs it and the cursor's form is private to `fs_interfaces::rpc`; the store's own paging (`Paging { limit, offset }`) is unused on the wire, so a large `list` costs O(all places) per page. The limit is the shared one in `fs-interfaces/DESIGN.md`; with a public cursor position the server would need one line.
 * **Provisional:** the tile configuration is read from the environment, because the shared `ServerOptions` refuses arguments it does not know and has no way to extend them.
@@ -132,6 +132,8 @@ file mtime so the order survives restarts). One process owns a cache dir (no cro
 * **The usage policy holds through redirects:** only the same host and port, except http on 80 to https on 443, never from https to http, every target through `check_url`; no `Referer`; a trailing dot does not make another host.
 * **A user and password in the URL are refused at the start:** they would never be sent, so an archive behind Basic auth could only fail. A token in the query is supported: `id`, `supportReport` and error texts show the URL without it (`public_id`, `without_url`); the cache keys by all of it, hashed.
 * **An archive that changes:** a read of another version is `SourceModified` before anything reads its bytes, and a 416 is too; the remote source reopens once per tile. A tile is cached only under the version it was asked under, so one read under way during a change is served and not kept.
+* **Writes run to their end** (`run_to_end`): a client that goes away does not stop one between its commit and telling the listeners, and a program that stops waits for it.
+* **A place no message can carry** (only another writer of the store can leave one) answers `too-large` with a cursor past it (`Problem::next`), so `list` stays readable behind it.
 * **Rules added later do not take stored places away:** the shape of a geometry is checked on the way in, only positions on the way out.
 * **At the edges of the world (`within`):** an area ending at 180 or -180 also finds what touches the other one. A geometry that is only a pole is found at every longitude. A geometry that merely reaches a pole keeps its own longitudes, as its bounding box says; so does a `MultiPoint` at both poles.
 * **Stored data:** a `Place` in the store that no longer reads as a feature answers `places/stored-data-invalid` (500), and `list` fails on the page that holds it, until it is repaired. Only another writer of the store can leave one; skipping it silently would hide data. Question to the owner.

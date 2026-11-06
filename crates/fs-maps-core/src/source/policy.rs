@@ -121,6 +121,16 @@ mod tests {
             &plain,
             &url("https://example.org/a.pmtiles")
         ));
+        let other_port = "https://example.org:8443/a.pmtiles";
+        assert!(!redirect_allowed(&from, &url(other_port)));
+        assert!(!redirect_allowed(&plain, &url(other_port)), "not 80 to 443");
+        assert!(!redirect_allowed(&plain, &url("http://example.org:8080/a")));
+        let plain_8080 = url("http://example.org:8080/a");
+        assert!(!redirect_allowed(
+            &plain_8080,
+            &url("https://example.org/a")
+        ));
+        assert!(!redirect_allowed(&from, &url("https://me:x@example.org/a")));
         let osm = url("https://tile.openstreetmap.org/a");
         assert!(!redirect_allowed(
             &osm,

@@ -19,8 +19,8 @@ fn main() {
         std::process::exit(2);
     });
     let served = run_until_signal(&options.socket, || async {
-        prepare_data_dir(&options.data)?;
-        let store = TursoStore::open(options.data.join("objects.db"))
+        let data = prepare_data_dir(&options.data)?;
+        let store = TursoStore::open(data.join("objects.db"))
             .await
             .map_err(std::io::Error::other)?;
         let store: Arc<dyn Store> = Arc::new(store);
