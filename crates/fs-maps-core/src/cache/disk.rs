@@ -2,10 +2,12 @@
 //!
 //! Pattern: Adapter — the file system behind the cache index. Each file is an 8-byte
 //! little-endian "stored at" timestamp followed by the raw MVT bytes; recency is persisted via
-//! the modification time (touched on every hit).
+//! the modification time (touched on every hit). The cache shows where a person looked, so all of
+//! it is for this user alone. What does not belong here is skipped.
 
 use std::fs;
 use std::io::{Read, Write};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -38,11 +40,25 @@ pub(super) fn path_of(dir: &Path, k: Key) -> PathBuf {
         .join(format!("{}.{FILE_EXT}", k.3))
 }
 
+/// Directories of the cache: this user's alone.
+pub(super) fn make_dirs(p: &Path) -> Result<()> {
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(p)
+        .map_err(|e| Error::io(p, e))
+}
+
 pub(super) fn read_dir(p: &Path) -> Result<Vec<fs::DirEntry>> {
     Ok(fs::read_dir(p)
         .map_err(|e| Error::io(p, e))?
         .flatten()
         .collect())
+}
+
+/// Entries below the top: a stray file where a directory belongs holds nothing.
+fn entries(p: &Path) -> Vec<fs::DirEntry> {
+    fs::read_dir(p).map_or_else(|_| Vec::new(), |d| d.flatten().collect())
 }
 
 fn read_stored_at(p: &Path) -> Option<u64> {
@@ -60,7 +76,12 @@ pub(super) fn touch(p: &Path) {
 
 /// Atomic write: temp file, then rename.
 pub(super) fn write_entry(tmp: &Path, path: &Path, now: u64, data: &[u8]) -> std::io::Result<()> {
-    let mut f = fs::File::create(tmp)?;
+    let mut f = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(tmp)?;
     f.write_all(&now.to_le_bytes())?;
     f.write_all(data)?;
     f.sync_data().ok();
@@ -85,14 +106,11 @@ pub(super) fn scan(dir: &Path) -> Result<Vec<Found>> {
         else {
             continue;
         };
-        if !src.path().is_dir() {
-            continue;
-        }
-        for z in read_dir(&src.path())? {
+        for z in entries(&src.path()) {
             let Some(zv) = num::<u8>(&z) else { continue };
-            for x in read_dir(&z.path())? {
+            for x in entries(&z.path()) {
                 let Some(xv) = num::<u32>(&x) else { continue };
-                for f in read_dir(&x.path())? {
+                for f in entries(&x.path()) {
                     if let Some(item) = scan_file(&f, (h, zv, xv)) {
                         found.push(item);
                     }

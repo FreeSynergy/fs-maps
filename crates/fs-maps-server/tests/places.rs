@@ -53,6 +53,7 @@ async fn a_place_goes_through_its_life() {
         assert_eq!(got, envelope);
         assert_eq!(feature, parsed(&sent));
 
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         let moved = point("Berlin Mitte", 13.39, 52.52);
         let mut update = p.update_request();
         write_object_id(update.get().init_id(), id);
@@ -63,7 +64,7 @@ async fn a_place_goes_through_its_life() {
         assert_eq!((after.id, after.name.as_str()), (id, "Berlin Mitte"));
         assert_eq!(after.published, envelope.published);
         assert_eq!(after.iri, envelope.iri);
-        assert!(after.updated >= envelope.updated);
+        assert!(after.updated > envelope.updated, "updated did not move");
         let text = updated.get_geojson().unwrap().to_str().unwrap();
         assert_eq!(parsed(text), parsed(&moved));
         assert_eq!(get(&p, id).await.unwrap().1, parsed(&moved));

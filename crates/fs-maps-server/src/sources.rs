@@ -5,11 +5,13 @@
 //! comes from the environment, because the shared `ServerOptions` take no arguments of a program.
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use fs_interfaces::rpc::prepare_data_dir;
+use fs_maps_core::cache::source_hash;
 use fs_maps_core::{
-    CacheConfig, CachedSource, FallbackSource, LazyHttpSource, NoSource, PmtilesFileSource,
+    CacheConfig, CachedSource, Error, FallbackSource, LazyHttpSource, NoSource, PmtilesFileSource,
     TileCache, TileSource,
 };
 
@@ -48,7 +50,20 @@ fn text(name: &str) -> Result<Option<String>, String> {
         .transpose()
 }
 
-fn cache_of_env() -> Result<CacheConfig, String> {
+/// An absolute path from the environment; the XDG rule ignores a relative one.
+fn absolute(name: &str) -> Option<PathBuf> {
+    set(name).map(PathBuf::from).filter(|p| p.is_absolute())
+}
+
+/// Two data directories are two people's or two purposes' maps: one default cache each.
+fn default_cache(data: &Path) -> Option<PathBuf> {
+    let base = absolute("XDG_CACHE_HOME").or_else(|| absolute("HOME").map(|h| h.join(".cache")))?;
+    let data = std::path::absolute(data).unwrap_or_else(|_| data.to_path_buf());
+    let name = format!("{:016x}", source_hash(&data.to_string_lossy()));
+    Some(base.join("freesynergy").join("maps").join(name))
+}
+
+fn cache_of_env(data: &Path) -> Result<CacheConfig, String> {
     let mib = match text(CACHE_MIB)? {
         Some(v) => v
             .parse::<u64>()
@@ -57,25 +72,25 @@ fn cache_of_env() -> Result<CacheConfig, String> {
     };
     let dir = set(CACHE)
         .map(PathBuf::from)
-        .or_else(|| set("XDG_CACHE_HOME").map(|d| PathBuf::from(d).join("freesynergy/maps")))
-        .or_else(|| set("HOME").map(|h| PathBuf::from(h).join(".cache/freesynergy/maps")))
+        .or_else(|| default_cache(data))
         .ok_or_else(|| format!("no $XDG_CACHE_HOME or $HOME: set {CACHE}"))?;
     Ok(CacheConfig::new(dir, mib.saturating_mul(1024 * 1024)))
 }
 
 impl TileConfig {
     /// `FS_MAPS_TILES`: local `PMTiles` files, a path list like `$PATH`. `FS_MAPS_TILES_URL`: a remote
-    /// archive, read through a cache (`FS_MAPS_CACHE`, default `$XDG_CACHE_HOME/freesynergy/maps`;
-    /// `FS_MAPS_CACHE_MIB`, default 1024); `FS_MAPS_USER_AGENT` names the program to the host.
+    /// archive, read through a cache (`FS_MAPS_CACHE`, default below `$XDG_CACHE_HOME/freesynergy/maps`,
+    /// one for each data directory; `FS_MAPS_CACHE_MIB`, default 1024); `FS_MAPS_USER_AGENT` names
+    /// the program to the host.
     ///
     /// # Errors
     /// A value that cannot be read, or no place for the cache.
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env(data: &Path) -> Result<Self, String> {
         let files = set(FILES)
             .map(|v| std::env::split_paths(&v).collect())
             .unwrap_or_default();
         let url = text(URL)?;
-        let cache = url.is_some().then(cache_of_env).transpose()?;
+        let cache = url.is_some().then(|| cache_of_env(data)).transpose()?;
         let user_agent = text(USER_AGENT)?.unwrap_or_else(|| DEFAULT_USER_AGENT.into());
         Ok(Self {
             files,
@@ -90,6 +105,11 @@ fn remote(url: &str, config: &TileConfig) -> fs_maps_core::Result<Arc<dyn TileSo
     let source = LazyHttpSource::new(url, &config.user_agent)?;
     Ok(match &config.cache {
         Some(cache) => {
+            // It shows where a person looked: the same rule as the data.
+            prepare_data_dir(&cache.dir).map_err(|source| Error::Io {
+                path: cache.dir.clone(),
+                source,
+            })?;
             let cache = Arc::new(TileCache::open(cache.clone())?);
             Arc::new(CachedSource::new(source, cache))
         }

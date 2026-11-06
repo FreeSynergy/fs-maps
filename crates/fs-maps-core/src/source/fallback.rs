@@ -1,7 +1,7 @@
 //! Fallback chain of tile sources.
 //!
 //! Pattern: Chain of Responsibility — each source in order may answer; the first that has the
-//! tile wins, the rest are never asked.
+//! tile wins, the rest are never asked. A tile that cannot exist reaches nobody.
 
 use std::sync::Arc;
 
@@ -9,7 +9,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 
 use super::{SourceInfo, TileSource};
-use crate::error::Result;
+use crate::error::{Error, Result};
+use crate::tile::Tile;
 
 /// First source that has the tile wins. Typical chain: offline region packages, then
 /// `CachedSource(PmtilesHttpSource)`. A failing source is skipped if a later one has the tile;
@@ -32,11 +33,13 @@ impl TileSource for FallbackSource {
         format!("fallback[{}]", ids.join(","))
     }
     async fn get_tile(&self, z: u8, x: u32, y: u32) -> Result<Option<Bytes>> {
+        Tile::new(z, x, y)?;
         let mut first_err = None;
         for s in &self.sources {
             match s.get_tile(z, x, y).await {
                 Ok(Some(t)) => return Ok(Some(t)),
                 Ok(None) => {}
+                Err(e @ Error::InvalidTile { .. }) => return Err(e),
                 Err(e) => {
                     first_err.get_or_insert(e);
                 }

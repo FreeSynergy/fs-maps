@@ -72,7 +72,15 @@ pub async fn watch(
     req.send().promise.await.unwrap()
 }
 
-/// Long enough for what the server sends to arrive; the feed runs on this thread too.
-pub async fn settle() {
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+impl Seen {
+    /// Wait until `count` calls arrived; the feed runs on this thread too.
+    pub async fn until(&self, count: usize) {
+        for _ in 0..400 {
+            if self.0.borrow().len() >= count {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        panic!("told only {:?}, waited for {count}", self.told());
+    }
 }

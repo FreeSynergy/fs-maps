@@ -1,31 +1,31 @@
 //! Local PMTiles file as a tile source.
 //!
-//! Pattern: Adapter — `AsyncPmTilesReader<FileBackend>` behind [`TileSource`].
+//! Pattern: Adapter — an archive over the file backend, behind [`TileSource`].
 
 use std::path::Path;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use pmtiles::{AsyncPmTilesReader, FileBackend, NoCache};
+use pmtiles::FileBackend;
 
-use super::pmt::{info_of, read_tile};
+use super::pmt::Archive;
 use super::{SourceInfo, TileSource};
 use crate::error::Result;
 
 /// A local PMTiles file (an offline region package, or any downloaded PMTiles).
 pub struct PmtilesFileSource {
     id: String,
-    reader: AsyncPmTilesReader<FileBackend, NoCache>,
+    archive: Archive<FileBackend>,
 }
 
 impl PmtilesFileSource {
-    /// Open a PMTiles file.
+    /// Open a PMTiles file of MVT tiles; anything else is refused here.
     pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let reader = AsyncPmTilesReader::new_with_path(path).await?;
+        let backend = FileBackend::try_from(path).await?;
         Ok(Self {
             id: format!("file:{}", path.display()),
-            reader,
+            archive: Archive::open(backend).await?,
         })
     }
 }
@@ -36,9 +36,9 @@ impl TileSource for PmtilesFileSource {
         self.id.clone()
     }
     async fn get_tile(&self, z: u8, x: u32, y: u32) -> Result<Option<Bytes>> {
-        read_tile(&self.reader, z, x, y).await
+        self.archive.tile(z, x, y).await
     }
     fn info(&self) -> Option<SourceInfo> {
-        Some(info_of(self.reader.get_header()))
+        Some(self.archive.info())
     }
 }

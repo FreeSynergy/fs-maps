@@ -1,7 +1,8 @@
 //! GeoJSON geometry validation and bounding boxes.
 //!
 //! Pattern: Interpreter-style recursion — walks the geometry tree by nesting depth and
-//! validates every position (RFC 7946, WGS84 ranges).
+//! validates every position (RFC 7946, WGS84 ranges), and the shape of lines and rings. Empty
+//! `coordinates` are allowed (RFC 7946 section 3.1); an empty line or ring inside them is not.
 
 use serde_json::Value;
 
@@ -41,6 +42,49 @@ fn collect(coords: &Value, depth: usize, out: &mut Vec<(f64, f64)>) -> Result<()
     arr.iter().try_for_each(|c| collect(c, depth - 1, out))
 }
 
+fn same_position(a: &Value, b: &Value) -> bool {
+    let (Some(a), Some(b)) = (a.as_array(), b.as_array()) else {
+        return false;
+    };
+    a.len() == b.len() && a.iter().zip(b).all(|(p, q)| p.as_f64() == q.as_f64())
+}
+
+fn line(coords: &Value) -> Result<()> {
+    match coords.as_array() {
+        Some(positions) if positions.len() >= 2 => Ok(()),
+        _ => gj("a LineString needs two or more positions"),
+    }
+}
+
+fn ring(coords: &Value) -> Result<()> {
+    let positions = coords.as_array().map_or(&[][..], Vec::as_slice);
+    if positions.len() < 4 {
+        return gj("a linear ring needs four or more positions");
+    }
+    if !same_position(&positions[0], &positions[positions.len() - 1]) {
+        return gj("a linear ring must end where it begins");
+    }
+    Ok(())
+}
+
+fn members(coords: &Value) -> &[Value] {
+    coords.as_array().map_or(&[][..], Vec::as_slice)
+}
+
+/// What RFC 7946 section 3.1 asks of the shape; the positions are valid by now.
+fn check_shape(kind: &str, coords: &Value) -> Result<()> {
+    match kind {
+        "LineString" if members(coords).is_empty() => Ok(()),
+        "LineString" => line(coords),
+        "MultiLineString" => members(coords).iter().try_for_each(line),
+        "Polygon" => members(coords).iter().try_for_each(ring),
+        "MultiPolygon" => members(coords)
+            .iter()
+            .try_for_each(|polygon| members(polygon).iter().try_for_each(ring)),
+        _ => Ok(()),
+    }
+}
+
 /// Validates a geometry and returns all its positions.
 pub(super) fn geometry_positions(g: &Value) -> Result<(String, Vec<(f64, f64)>)> {
     let Some(t) = g.get("type").and_then(Value::as_str) else {
@@ -67,6 +111,7 @@ pub(super) fn geometry_positions(g: &Value) -> Result<(String, Vec<(f64, f64)>)>
         return gj("geometry without coordinates");
     };
     collect(c, depth, &mut pts)?;
+    check_shape(t, c)?;
     Ok((t.to_owned(), pts))
 }
 

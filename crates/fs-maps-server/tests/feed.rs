@@ -5,7 +5,7 @@ mod common;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common::seen::{Seen, Told, settle, watch};
+use common::seen::{Seen, Told, watch};
 use common::{create, delete, point, serving, store_places, with_server};
 use fs_interfaces::Capabilities;
 use fs_interfaces::rpc::{FEED_ENDED_PROBLEM_TYPE, write_object_id};
@@ -23,16 +23,19 @@ async fn subscribers_see_changes_until_they_drop_the_capability() {
         let kept = watch(&p, &other).await;
 
         let id = create(&p, "Watched", 13.4, 52.5).await;
-        settle().await; // the envelope of a change is read when it goes out
+        seen.until(1).await; // the envelope of a change is read when it goes out
+        other.until(1).await;
         let mut update = p.update_request();
         write_object_id(update.get().init_id(), id);
         update
             .get()
             .set_geojson(point("Moved", 13.5, 52.5).as_str());
         update.send().promise.await.unwrap();
-        settle().await;
+        seen.until(2).await;
+        other.until(2).await;
         delete(&p, id).await;
-        settle().await;
+        seen.until(3).await;
+        other.until(3).await;
         let expected = [
             Told::Created(id, "Watched".into()),
             Told::Updated(id, "Moved".into()),
@@ -43,13 +46,20 @@ async fn subscribers_see_changes_until_they_drop_the_capability() {
 
         drop(subscription);
         drop(answer);
-        settle().await;
+        // A round trip lets the release arrive; then the other subscriber is the clock: when it has
+        // heard of a later change, a feed still running would have told this one too.
+        p.support_report_request().send().promise.await.unwrap();
         let later = create(&p, "Unwatched", 2.3, 48.8).await;
-        settle().await;
+        other.until(4).await;
+        let last = create(&p, "Unwatched too", 2.3, 48.8).await;
+        other.until(5).await;
         assert_eq!(seen.told(), expected, "told after the drop, or told ended");
         assert_eq!(
-            other.told().last(),
-            Some(&Told::Created(later, "Unwatched".into()))
+            other.told()[3..],
+            [
+                Told::Created(later, "Unwatched".into()),
+                Told::Created(last, "Unwatched too".into())
+            ]
         );
         drop(kept);
     })
@@ -68,8 +78,10 @@ async fn a_refused_write_is_not_a_change() {
         let mut gone = p.delete_request();
         write_object_id(gone.get().init_id(), ObjectId::new());
         assert!(gone.send().promise.await.is_err());
-        settle().await;
-        assert_eq!(seen.told(), []);
+        // A write that did happen is the clock: only it is told.
+        let id = create(&p, "Real", 1.0, 1.0).await;
+        seen.until(1).await;
+        assert_eq!(seen.told(), [Told::Created(id, "Real".into())]);
     })
     .await;
 }
@@ -106,13 +118,16 @@ async fn a_read_that_fails_ends_the_feed_and_says_so() {
         let seen = Seen::default();
         let _answer = watch(&p, &seen).await;
         let id = create(&p, "Not told", 1.0, 1.0).await;
-        settle().await;
+        seen.until(1).await;
         assert_eq!(
             seen.told(),
             [Told::Ended(FEED_ENDED_PROBLEM_TYPE.into(), 410)]
         );
+        let clock = Seen::default();
+        let _running = watch(&p, &clock).await;
         delete(&p, id).await;
-        settle().await;
+        clock.until(1).await;
+        assert_eq!(clock.told(), [Told::Deleted(id)]);
         assert_eq!(seen.told().len(), 1, "told after the end");
     })
     .await;
@@ -128,7 +143,7 @@ async fn a_place_gone_by_now_is_skipped_and_the_feed_goes_on() {
         let _answer = watch(&p, &seen).await;
         let id = create(&p, "Gone at once", 1.0, 1.0).await;
         delete(&p, id).await;
-        settle().await;
+        seen.until(1).await;
         assert_eq!(seen.told(), [Told::Deleted(id)]);
     })
     .await;

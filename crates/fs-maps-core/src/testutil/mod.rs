@@ -5,5 +5,5 @@
 mod fixture;
 mod server;
 
-pub use fixture::write_fixture;
+pub use fixture::{write_fixture, write_labelled};
 pub use server::RangeServer;

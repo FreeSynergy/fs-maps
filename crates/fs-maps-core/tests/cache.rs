@@ -61,6 +61,13 @@ fn ttl_expiry() {
     assert!(c.get_at("s", 0, 0, 0, 1100).is_some());
     assert!(c.get_at("s", 0, 0, 0, 1101).is_none());
     assert_eq!(c.stats().expired, 1);
+    // It stays until a fetch replaced it.
+    assert_eq!(c.get_stale("s", 0, 0, 0).unwrap(), &b"x"[..]);
+    assert!(c.disk_bytes() > 0);
+    c.put_at("s", 0, 0, 0, b"new", 1101).unwrap();
+    assert_eq!(c.get_at("s", 0, 0, 0, 1101).unwrap(), &b"new"[..]);
+    c.forget("s", 0, 0, 0);
+    assert!(c.get_stale("s", 0, 0, 0).is_none());
     assert_eq!(c.disk_bytes(), 0);
 }
 
@@ -112,4 +119,42 @@ async fn cached_source_hits_cache_second_time() {
     assert_eq!(cs.inner().1.load(Ordering::SeqCst), 1);
     assert!(cs.get_tile(2, 0, 0).await.unwrap().is_none());
     assert_eq!(cs.cache().stats().entries, 1, "absent tiles are not cached");
+}
+
+#[test]
+fn a_stray_file_stops_nothing() {
+    let d = tempfile::tempdir().unwrap();
+    {
+        let c = TileCache::open(CacheConfig::new(d.path(), 1000)).unwrap();
+        c.put("s", 2, 1, 1, b"kept").unwrap();
+    }
+    let hash = format!("{:016x}", fs_maps_core::cache::source_hash("s"));
+    let source = d.path().join(&hash);
+    std::fs::write(d.path().join("notes.txt"), "x").unwrap();
+    std::fs::write(d.path().join("00000000000000ff"), "x").unwrap();
+    std::fs::write(source.join("3"), "x").unwrap();
+    std::fs::write(source.join("2").join("7"), "x").unwrap();
+    std::fs::write(source.join("2").join("1").join("junk"), "x").unwrap();
+    let c = TileCache::open(CacheConfig::new(d.path(), 1000)).unwrap();
+    assert_eq!(c.get("s", 2, 1, 1).unwrap(), &b"kept"[..]);
+    assert_eq!(c.stats().entries, 1);
+}
+
+#[test]
+fn the_cache_is_for_this_user_alone() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = tempfile::tempdir().unwrap();
+    let dir = d.path().join("cache");
+    let c = TileCache::open(CacheConfig::new(&dir, 1000)).unwrap();
+    c.put("s", 2, 1, 1, b"x").unwrap();
+    c.remember_version("s", "v1");
+    let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+    let hash = format!("{:016x}", fs_maps_core::cache::source_hash("s"));
+    assert_eq!(mode(&dir), 0o700);
+    assert_eq!(mode(&dir.join(&hash).join("2").join("1")), 0o700);
+    assert_eq!(
+        mode(&dir.join(&hash).join("2").join("1").join("1.mvt")),
+        0o600
+    );
+    assert_eq!(mode(&dir.join("versions")), 0o700);
 }

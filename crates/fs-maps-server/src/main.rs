@@ -14,7 +14,7 @@ use fs_store::{Store, TursoStore};
 
 fn main() {
     let options = ServerOptions::from_env_or_exit("maps");
-    let tiles = TileConfig::from_env().unwrap_or_else(|problem| {
+    let tiles = TileConfig::from_env(&options.data).unwrap_or_else(|problem| {
         eprintln!("fs-maps-server: {problem}");
         std::process::exit(2);
     });

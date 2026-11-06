@@ -50,6 +50,21 @@ fn a_program_refuses_what_it_cannot_serve_with_the_right_code() {
         "https://tile.openstreetmap.org/x.pmtiles",
     );
     assert_eq!(code(&[], &[forbidden]), Some(1));
+    let dotted = (
+        "FS_MAPS_TILES_URL",
+        "https://tile.openstreetmap.org./x.pmtiles",
+    );
+    assert_eq!(code(&[], &[dotted]), Some(1));
+    let agent = ("FS_MAPS_USER_AGENT", "A long enough agent\nwith a newline");
+    assert_eq!(code(&[], &[url, agent]), Some(1));
+    let pictures = dir.path().join("pictures.pmtiles");
+    let mut bytes = b"PMTiles\x03".to_vec();
+    bytes.resize(16384, 0);
+    std::fs::write(&pictures, bytes).unwrap();
+    assert_eq!(
+        code(&[], &[("FS_MAPS_TILES", pictures.to_str().unwrap())]),
+        Some(1)
+    );
     assert!(!socket.exists(), "a refused start left its socket behind");
     assert_eq!(code(&["--help"], &[]), Some(0));
 }
@@ -66,4 +81,19 @@ fn a_data_directory_others_can_reach_is_refused() {
         "it opened the store anyway"
     );
     assert!(!socket.exists());
+}
+
+#[test]
+fn a_cache_others_can_reach_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (socket, data) = paths(dir.path());
+    let cache = dir.path().join("cache");
+    std::fs::create_dir(&cache).unwrap();
+    std::fs::set_permissions(&cache, PermissionsExt::from_mode(0o755)).unwrap();
+    let status = program(&socket, &data)
+        .env("FS_MAPS_TILES_URL", "https://example.invalid/a.pmtiles")
+        .env("FS_MAPS_CACHE", &cache)
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(1));
 }

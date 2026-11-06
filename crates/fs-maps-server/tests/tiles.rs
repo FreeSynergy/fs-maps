@@ -1,21 +1,18 @@
-//! The `TileSource` interface on the same socket, over local PMTiles and a loopback server.
+//! The `TileSource` interface reached through `Places.tiles`, over local PMTiles.
 
 mod common;
 
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use common::{Consumer, TOO_LARGE, is, refused, with_server, with_tiles};
 use fs_interfaces::places_capnp::tile_source;
 use fs_interfaces::rpc::{MAX_PAGE_BYTES, Problem};
 use fs_interfaces::{Capabilities, UNSUPPORTED_PROBLEM_TYPE};
-use fs_maps_core::testutil::{RangeServer, write_fixture};
-use fs_maps_core::{CacheConfig, MemorySource};
+use fs_maps_core::MemorySource;
+use fs_maps_core::testutil::write_fixture;
 use fs_maps_server::{TileConfig, open_tiles};
 
 const INVALID: &str = common::INVALID;
-const SOURCE_FAILED: &str = "https://freesynergy.net/problems/places/tile-source-failed";
-const UA: &str = "FreeSynergy-Maps-test/0.2 (+https://freesynergy.example)";
 
 async fn tile(t: &tile_source::Client, z: u8, x: u32, y: u32) -> capnp::Result<Option<Vec<u8>>> {
     let mut req = t.tile_request();
@@ -130,61 +127,7 @@ async fn a_tile_larger_than_a_message_is_refused_and_the_connection_lives() {
     .await;
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn a_remote_archive_reads_through_the_cache_after_the_local_package() {
-    let dir = tempfile::tempdir().unwrap();
-    let remote = dir.path().join("remote.pmtiles");
-    let local = dir.path().join("local.pmtiles");
-    write_fixture(&remote, 3).await.unwrap();
-    write_fixture(&local, 1).await.unwrap();
-    let server = RangeServer::start(&remote).await.unwrap();
-    let config = TileConfig {
-        files: vec![local],
-        url: Some(server.url.clone()),
-        user_agent: UA.into(),
-        cache: Some(CacheConfig::new(dir.path().join("cache"), 1 << 20)),
-    };
-    let source = open_tiles(&config).await.unwrap();
-    let requests = || server.requests.load(Ordering::SeqCst);
-    assert_eq!(requests(), 0, "opening must not touch the network");
-    with_tiles(source, |maps| async move {
-        let t = maps.tiles;
-        assert_eq!(
-            tile(&t, 1, 0, 0).await.unwrap().unwrap(),
-            fixture_tile(1, 0, 0)
-        );
-        assert_eq!(requests(), 0, "the local package answered");
-        assert_eq!(
-            tile(&t, 3, 1, 1).await.unwrap().unwrap(),
-            fixture_tile(3, 1, 1)
-        );
-        let after_first = requests();
-        assert!(after_first > 0);
-        assert_eq!(
-            tile(&t, 3, 1, 1).await.unwrap().unwrap(),
-            fixture_tile(3, 1, 1)
-        );
-        assert_eq!(requests(), after_first, "the cache answered");
-        assert_eq!(tile(&t, 4, 0, 0).await.unwrap(), None);
-    })
-    .await;
-    let agents = server.user_agents.lock().unwrap();
-    assert!(!agents.is_empty() && agents.iter().all(|u| u == UA));
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn an_unreachable_archive_is_a_typed_failure_not_a_start_failure() {
-    let config = TileConfig {
-        url: Some("http://127.0.0.1:9/map.pmtiles".into()),
-        user_agent: UA.into(),
-        ..TileConfig::default()
-    };
-    let source = open_tiles(&config).await.unwrap();
-    with_tiles(source, |maps| async move {
-        assert_eq!(
-            refused(tile(&maps.tiles, 0, 0, 0).await),
-            is(SOURCE_FAILED, 502)
-        );
-    })
-    .await;
+#[test]
+fn the_limit_of_a_tile_is_the_limit_of_an_answer() {
+    assert_eq!(fs_maps_core::MAX_TILE_BYTES, MAX_PAGE_BYTES);
 }

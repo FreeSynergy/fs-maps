@@ -15,6 +15,7 @@ mod index;
 mod maintenance;
 mod stats;
 mod tile_cache;
+mod versions;
 
 pub use cached::CachedSource;
 pub use config::CacheConfig;

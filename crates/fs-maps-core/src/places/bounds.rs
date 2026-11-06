@@ -6,6 +6,11 @@
 //! numeric order. Stored boxes are rounded outwards (minimum down, maximum up), query boxes the
 //! same way, so overlap is closed and never misses a place; it may add one that is 1e-7 degrees
 //! away. A place overlaps an area when the bounding box of its geometry does (not the geometry).
+//!
+//! The same point has more than one set of numbers: 180 and -180 are one meridian, so an area ending
+//! at one of them also finds what touches the other. At a pole every longitude is the same point, so
+//! a geometry that is only that pole is indexed over all longitudes. One that merely reaches the pole
+//! keeps its own longitudes, its bounding box says so.
 
 use fs_store::{Cond, IndexFields, Op};
 
@@ -33,9 +38,15 @@ fn key(degrees: f64, offset: f64, up: bool) -> String {
 /// Index fields that make a place findable by `within`: the four edges of its bounding box.
 pub fn bbox_index(b: &BBox) -> IndexFields {
     let one = |k: &str, v: String| (k.to_string(), vec![v]);
+    let at_a_pole = b.min_lat == b.max_lat && b.min_lat.abs() == 90.0;
+    let (west, east) = if at_a_pole {
+        (-180.0, 180.0)
+    } else {
+        (b.min_lon, b.max_lon)
+    };
     [
-        one(LON_MIN, key(b.min_lon, 180.0, false)),
-        one(LON_MAX, key(b.max_lon, 180.0, true)),
+        one(LON_MIN, key(west, 180.0, false)),
+        one(LON_MAX, key(east, 180.0, true)),
         one(LAT_MIN, key(b.min_lat, 90.0, false)),
         one(LAT_MAX, key(b.max_lat, 90.0, true)),
     ]
@@ -86,7 +97,8 @@ impl Area {
     ///
     /// Latitude and the normal longitude test are ANDed. Over the antimeridian the area is
     /// `[west, 180]` plus `[-180, east]`; a box `[a, b]` meets one of them when `b >= west` or
-    /// `a <= east`, which is a single OR-group, so it is still one store query.
+    /// `a <= east`, which is a single OR-group, so it is still one store query. An area ending at
+    /// 180 or -180 reaches the same meridian from the other side, also a single OR-group.
     pub fn conditions(&self) -> (Vec<Cond>, Vec<Cond>) {
         let at = |k: &str, op, v| Cond::Index {
             key: k.into(),
@@ -101,6 +113,14 @@ impl Area {
         let lon_min_le_east = at(LON_MIN, Op::Le, key(self.east, 180.0, true));
         if self.crosses_antimeridian() {
             return (all, vec![lon_max_ge_west, lon_min_le_east]);
+        }
+        if self.west == -180.0 {
+            let touches_180 = at(LON_MAX, Op::Ge, key(180.0, 180.0, false));
+            return (all, vec![lon_min_le_east, touches_180]);
+        }
+        if self.east == 180.0 {
+            let touches_minus_180 = at(LON_MIN, Op::Le, key(-180.0, 180.0, true));
+            return (all, vec![lon_max_ge_west, touches_minus_180]);
         }
         all.extend([lon_max_ge_west, lon_min_le_east]);
         (all, vec![])

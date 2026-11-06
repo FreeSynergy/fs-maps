@@ -1,39 +1,101 @@
-//! Shared glue between the `pmtiles` crate and [`TileSource`](super::TileSource).
+//! One opened archive: what it must be, and its tiles within the limits.
 //!
-//! Pattern: Adapter — translates the foreign header/reader types into our `SourceInfo` and
-//! tile reads.
+//! Pattern: Adapter + Facade — translates the foreign header and reader into our `SourceInfo` and
+//! tile reads, on top of the guard. `TileSource` promises uncompressed MVT, so an archive of anything
+//! else is refused at open and not later per tile.
+
+use std::io;
+use std::sync::Arc;
 
 use bytes::Bytes;
-use pmtiles::{AsyncPmTilesReader, TileId};
+use pmtiles::{AsyncBackend, AsyncPmTilesReader, Compression, Header, PmtError, TileId, TileType};
 
 use super::SourceInfo;
-use crate::error::Result;
+use super::decode::{MAX_TILE_BYTES, bounded};
+use super::directories::BoundedDirectories;
+use super::guard::{Facts, Guarded};
+use crate::error::{Error, Result};
 use crate::tile::{BBox, Tile};
 
-pub(super) fn info_of(h: &pmtiles::Header) -> SourceInfo {
-    SourceInfo {
-        min_zoom: h.min_zoom,
-        max_zoom: h.max_zoom,
-        bounds: BBox::new(
-            h.min_longitude,
-            h.min_latitude,
-            h.max_longitude,
-            h.max_latitude,
-        )
-        .ok(),
+const ZSTD: &str = "zstd needs a C library, FreeSynergy stays pure Rust; recompress with gzip";
+
+fn no_zstd(e: PmtError) -> Error {
+    match e {
+        PmtError::UnsupportedCompression(Compression::Zstd) => Error::Archive(ZSTD.into()),
+        other => other.into(),
     }
 }
 
-pub(super) async fn read_tile<B, C>(
-    r: &AsyncPmTilesReader<B, C>,
-    z: u8,
-    x: u32,
-    y: u32,
-) -> Result<Option<Bytes>>
-where
-    B: pmtiles::AsyncBackend + Sync + Send,
-    C: pmtiles::DirectoryCache + Sync + Send,
-{
-    let coord = Tile::new(z, x, y)?.pmt()?;
-    Ok(r.get_tile_decompressed(TileId::from(coord)).await?)
+fn check(header: &Header) -> Result<()> {
+    if header.tile_type != TileType::Mvt {
+        return Err(Error::Archive(format!(
+            "its tiles are {:?}, a tile source serves MVT",
+            header.tile_type
+        )));
+    }
+    match header.tile_compression {
+        Compression::None | Compression::Gzip | Compression::Brotli => Ok(()),
+        Compression::Zstd => Err(Error::Archive(ZSTD.into())),
+        Compression::Unknown => Err(Error::Archive("its compression is unknown".into())),
+    }
+}
+
+/// An archive that was checked at open.
+pub(super) struct Archive<B: AsyncBackend + Sync + Send> {
+    reader: AsyncPmTilesReader<Guarded<B>, BoundedDirectories>,
+    facts: Arc<Facts>,
+}
+
+impl<B: AsyncBackend + Sync + Send> Archive<B> {
+    pub(super) async fn open(backend: B) -> Result<Self> {
+        let facts = Arc::new(Facts::default());
+        let guarded = Guarded {
+            inner: backend,
+            facts: facts.clone(),
+        };
+        let reader =
+            AsyncPmTilesReader::try_from_source_and_cache(guarded, BoundedDirectories::default())
+                .await
+                .map_err(no_zstd)?;
+        check(reader.get_header())?;
+        Ok(Self { reader, facts })
+    }
+
+    pub(super) fn info(&self) -> SourceInfo {
+        let h = self.reader.get_header();
+        SourceInfo {
+            min_zoom: h.min_zoom,
+            max_zoom: h.max_zoom,
+            bounds: BBox::new(
+                h.min_longitude,
+                h.min_latitude,
+                h.max_longitude,
+                h.max_latitude,
+            )
+            .ok(),
+        }
+    }
+
+    pub(super) fn version(&self) -> Option<String> {
+        self.facts.version()
+    }
+
+    pub(super) async fn tile(&self, z: u8, x: u32, y: u32) -> Result<Option<Bytes>> {
+        let tile = Tile::new(z, x, y)?;
+        let large = || Error::TileTooLarge { z, x, y };
+        let raw = match self.reader.get_tile(TileId::from(tile.pmt()?)).await {
+            Ok(raw) => raw,
+            Err(PmtError::Reading(e)) if e.kind() == io::ErrorKind::FileTooLarge => {
+                return Err(large());
+            }
+            Err(e) => return Err(e.into()),
+        };
+        let Some(raw) = raw else { return Ok(None) };
+        let compression = self.reader.get_header().tile_compression;
+        match bounded(compression, raw, MAX_TILE_BYTES).await {
+            Ok(Some(tile)) => Ok(Some(tile)),
+            Ok(None) => Err(large()),
+            Err(e) => Err(PmtError::Reading(e).into()),
+        }
+    }
 }

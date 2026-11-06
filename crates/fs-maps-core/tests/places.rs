@@ -27,6 +27,20 @@ fn point_to_place_and_back() {
 }
 
 #[test]
+fn what_rfc_7946_allows_passes() {
+    for geometry in [
+        json!({"type":"LineString","coordinates":[]}),
+        json!({"type":"LineString","coordinates":[[1,2],[3,4]]}),
+        json!({"type":"Polygon","coordinates":[]}),
+        json!({"type":"Polygon","coordinates":[[[0,0],[2,0],[2,1],[0.0,0.0]]]}),
+        json!({"type":"MultiPoint","coordinates":[]}),
+    ] {
+        let f = json!({"type":"Feature","geometry":geometry,"properties":{"name":"x"}});
+        assert!(place_from_feature(&f, None).is_ok(), "{f}");
+    }
+}
+
+#[test]
 fn polygon_bbox_and_name_fallbacks() {
     let f = json!({"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[0,0],[2,0],[2,1],[0,1],[0,0]]]},
                    "properties":{"name:de":"Feld","name:en":"Field"}});
@@ -51,6 +65,13 @@ fn rejects_bad_features() {
         json!({"type":"Feature","geometry":{"type":"Point","coordinates":[1]},"properties":{"name":"x"}}),
         json!({"type":"Feature","geometry":{"type":"Circle","coordinates":[1,2]},"properties":{"name":"x"}}),
         json!({"type":"Feature","geometry":{"type":"Point","coordinates":["a",2]},"properties":{"name":"x"}}),
+        json!({"type":"Feature","geometry":{"type":"LineString","coordinates":[[1,2]]},"properties":{"name":"x"}}),
+        json!({"type":"Feature","geometry":{"type":"MultiLineString","coordinates":[[[1,2],[3,4]],[]]},"properties":{"name":"x"}}),
+        json!({"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[0,0],[2,0],[2,1],[0,1]]]},"properties":{"name":"x"}}),
+        json!({"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[0,0],[2,0],[0,0]]]},"properties":{"name":"x"}}),
+        json!({"type":"Feature","geometry":{"type":"Polygon","coordinates":[[]]},"properties":{"name":"x"}}),
+        json!({"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[0,0],[2,0],[2,1],[0,1]]]]},"properties":{"name":"x"}}),
+        json!({"type":"Feature","geometry":{"type":"GeometryCollection","geometries":[{"type":"LineString","coordinates":[[1,2]]}]},"properties":{"name":"x"}}),
         json!({"type":"Feature","id":[1],"geometry":null,"properties":{"name":"x"}}),
     ] {
         assert!(place_from_feature(&f, None).is_err(), "{f}");

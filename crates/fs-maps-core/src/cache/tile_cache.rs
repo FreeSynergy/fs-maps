@@ -3,6 +3,7 @@
 //! Pattern: Repository — get/put/clear over tiles keyed by `(source, z, x, y)`; the LRU index
 //! (`index.rs`) and the disk layout (`disk.rs`) are collaborators.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -11,7 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use bytes::Bytes;
 
 use super::config::CacheConfig;
-use super::disk::{HEADER, now_secs, path_of, scan, source_hash, touch, write_entry};
+use super::disk::{HEADER, make_dirs, now_secs, path_of, scan, source_hash, touch, write_entry};
 use super::index::{Entry, Inner};
 use super::stats::CacheStats;
 use crate::error::{Error, Result};
@@ -21,13 +22,14 @@ pub struct TileCache {
     pub(super) cfg: Mutex<CacheConfig>,
     pub(super) inner: Mutex<Inner>,
     tmp_counter: AtomicU64,
+    pub(super) versions: Mutex<HashMap<u64, String>>,
 }
 
 impl TileCache {
     /// Open (and scan) a cache directory; creates it if needed. If the directory holds more than
     /// `max_bytes` (limit lowered), the oldest entries are evicted immediately.
     pub fn open(cfg: CacheConfig) -> Result<Self> {
-        fs::create_dir_all(&cfg.dir).map_err(|e| Error::io(&cfg.dir, e))?;
+        make_dirs(&cfg.dir)?;
         let mut found = scan(&cfg.dir)?;
         found.sort_by_key(|f| f.0);
         let mut inner = Inner::new();
@@ -47,6 +49,7 @@ impl TileCache {
             cfg: Mutex::new(cfg),
             inner: Mutex::new(inner),
             tmp_counter: AtomicU64::new(0),
+            versions: Mutex::new(HashMap::new()),
         };
         {
             let mut g = cache.inner.lock().expect("cache lock");
@@ -78,7 +81,7 @@ impl TileCache {
         self.evict(&mut g);
     }
 
-    /// Look a tile up. Hits refresh the LRU position.
+    /// Look a tile up. Hits refresh the LRU position; an expired tile is a miss, and kept.
     pub fn get(&self, source_id: &str, z: u8, x: u32, y: u32) -> Option<Bytes> {
         self.get_at(source_id, z, x, y, now_secs())
     }
@@ -98,8 +101,7 @@ impl TileCache {
             return None;
         };
         if ttl.is_some_and(|ttl| now.saturating_sub(e.stored_at) > ttl.as_secs()) {
-            g.remove(&key);
-            let _ = fs::remove_file(&path);
+            // It stays until a fetch replaced it: the source may be away (`get_stale`).
             g.stats.expired += 1;
             g.stats.misses += 1;
             return None;
@@ -155,7 +157,7 @@ impl TileCache {
         }
         g.remove(&key);
         let parent = path.parent().expect("has parent");
-        fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+        make_dirs(parent)?;
         let tmp = parent.join(format!(
             ".tmp-{}",
             self.tmp_counter.fetch_add(1, Ordering::Relaxed)

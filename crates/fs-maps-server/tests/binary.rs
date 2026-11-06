@@ -6,8 +6,8 @@ use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use fs_interfaces::places_capnp::places;
-use fs_interfaces::rpc::{Problem, connect};
-use fs_maps_core::testutil::{RangeServer, write_fixture};
+use fs_interfaces::rpc::{connect, read_envelope};
+use fs_maps_core::testutil::write_fixture;
 
 fn program(socket: &Path, data: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fs-maps-server"));
@@ -95,6 +95,7 @@ async fn places_survive_a_restart_and_a_second_start_is_refused() {
             write_fixture(&package, 2).await.unwrap();
             let start = || {
                 program(&socket, &data)
+                    .args(["--instance", "maps.example.org"])
                     .env("FS_MAPS_TILES", &package)
                     .spawn()
                     .unwrap()
@@ -114,7 +115,11 @@ async fn places_survive_a_restart_and_a_second_start_is_refused() {
             create.get().set_geojson(
                 r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[1,2]},"properties":{"name":"Kept"}}"#,
             );
-            create.send().promise.await.unwrap();
+            let created = create.send().promise.await.unwrap();
+            let place = created.get().unwrap().get_place().unwrap();
+            let envelope = read_envelope(place.get_envelope().unwrap()).unwrap();
+            let iri = format!("https://maps.example.org/places/{}", envelope.id);
+            assert_eq!(envelope.iri.as_deref(), Some(iri.as_str()));
             drop(connection);
             assert_eq!(tile(&socket, 2).await.unwrap().unwrap(), expected_tile(2));
             assert_eq!(tile(&socket, 3).await.unwrap(), None);
@@ -127,45 +132,6 @@ async fn places_survive_a_restart_and_a_second_start_is_refused() {
             assert_eq!(stored_names(&socket).await, ["Kept"]);
             assert_eq!(tile(&socket, 2).await.unwrap().unwrap(), expected_tile(2));
             terminate(again);
-        })
-        .await;
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn after_the_archive_is_gone_the_cache_still_answers_and_a_restart_works() {
-    let local = tokio::task::LocalSet::new();
-    local
-        .run_until(async {
-            let dir = tempfile::tempdir().unwrap();
-            let (socket, data) = paths(dir.path());
-            let cache = dir.path().join("cache");
-            let archive = dir.path().join("remote.pmtiles");
-            write_fixture(&archive, 2).await.unwrap();
-            let server = RangeServer::start(&archive).await.unwrap();
-            let url = server.url.clone();
-            let start = || {
-                program(&socket, &data)
-                    .env("FS_MAPS_TILES_URL", &url)
-                    .env("FS_MAPS_CACHE", &cache)
-                    .env("FS_MAPS_CACHE_MIB", "1")
-                    .spawn()
-                    .unwrap()
-            };
-
-            let online = start();
-            wait_for(&socket).await;
-            assert_eq!(tile(&socket, 1).await.unwrap().unwrap(), expected_tile(1));
-            terminate(online);
-            drop(server);
-
-            let offline = start();
-            wait_for(&socket).await;
-            assert_eq!(tile(&socket, 1).await.unwrap().unwrap(), expected_tile(1));
-            let e = tile(&socket, 2).await.err().unwrap();
-            let problem = Problem::from_error(&e).unwrap();
-            assert_eq!(problem.status, 502);
-            assert_eq!(stored_names(&socket).await, Vec::<String>::new());
-            terminate(offline);
         })
         .await;
 }

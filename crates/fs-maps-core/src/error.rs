@@ -60,6 +60,22 @@ pub enum Error {
     /// The progress observer asked to stop.
     #[error("download cancelled")]
     Cancelled,
+    /// A tile larger than one answer may be; never read further than that.
+    #[error("tile {z}/{x}/{y} is too large")]
+    TileTooLarge {
+        /// Zoom.
+        z: u8,
+        /// Column.
+        x: u32,
+        /// Row.
+        y: u32,
+    },
+    /// The archive is not what a source can serve: not MVT, or a compression we do not read.
+    #[error("unusable archive: {0}")]
+    Archive(String),
+    /// A remote source failed a moment ago and is not asked again yet.
+    #[error("tile source unavailable: {0}")]
+    SourceUnavailable(String),
     /// Malformed `geo:` URI.
     #[error("invalid geo: URI: {0}")]
     GeoUri(String),

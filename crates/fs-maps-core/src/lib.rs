@@ -50,7 +50,7 @@ pub use places::{
 };
 pub use region::{Estimate, Progress, ProgressObserver, RegionDownload, RegionReport, RegionSpec};
 pub use source::{
-    FallbackSource, LazyHttpSource, MemorySource, NoSource, PmtilesFileSource, PmtilesHttpSource,
-    SourceInfo, TileSource,
+    FallbackSource, LazyHttpSource, MAX_TILE_BYTES, MemorySource, NoSource, PmtilesFileSource,
+    PmtilesHttpSource, SourceInfo, TileSource,
 };
 pub use tile::{BBox, Tile};

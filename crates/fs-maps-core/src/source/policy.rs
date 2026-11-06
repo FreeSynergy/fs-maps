@@ -21,7 +21,8 @@ pub(super) fn check_url(url: &str) -> Result<Url> {
         )));
     }
     if let Some(host) = url.host_str() {
-        let host = host.to_ascii_lowercase();
+        // `example.org.` is the same host as `example.org`.
+        let host = host.trim_end_matches('.').to_ascii_lowercase();
         if FORBIDDEN_HOSTS
             .iter()
             .any(|h| host == *h || host.ends_with(&format!(".{h}")))
@@ -32,6 +33,27 @@ pub(super) fn check_url(url: &str) -> Result<Url> {
         }
     }
     Ok(url)
+}
+
+/// The URL as it may be shown: what it names, without credentials, query or fragment.
+pub(super) fn public_id(url: &Url) -> String {
+    let mut shown = url.clone();
+    let _ = shown.set_username("");
+    let _ = shown.set_password(None);
+    shown.set_query(None);
+    shown.set_fragment(None);
+    shown.to_string()
+}
+
+/// A redirect may stay on its host and not lose TLS; the target passes the same checks as the start.
+pub(super) fn redirect_allowed(from: &Url, to: &Url) -> bool {
+    let host = |u: &Url| {
+        u.host_str()
+            .map(|h| h.trim_end_matches('.').to_ascii_lowercase())
+    };
+    host(from) == host(to)
+        && !(from.scheme() == "https" && to.scheme() != "https")
+        && check_url(to.as_str()).is_ok()
 }
 
 /// Reject empty or library-default User-Agents.
@@ -56,6 +78,51 @@ pub(super) fn check_user_agent(ua: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_trailing_dot_is_the_same_host() {
+        assert!(check_url("https://tile.openstreetmap.org./x.pmtiles").is_err());
+        assert!(check_url("https://a.tile.osm.org../x.pmtiles").is_err());
+        assert!(check_url("https://example.org./x.pmtiles").is_ok());
+    }
+
+    #[test]
+    fn only_a_redirect_on_the_same_host_passes() {
+        let url = |u: &str| Url::parse(u).unwrap();
+        let from = url("https://example.org/a.pmtiles");
+        assert!(redirect_allowed(
+            &from,
+            &url("https://example.org/b.pmtiles")
+        ));
+        assert!(redirect_allowed(
+            &from,
+            &url("https://EXAMPLE.org./b.pmtiles")
+        ));
+        assert!(!redirect_allowed(
+            &from,
+            &url("https://other.org/a.pmtiles")
+        ));
+        assert!(
+            !redirect_allowed(&from, &url("http://example.org/a.pmtiles")),
+            "lost TLS"
+        );
+        let plain = url("http://example.org/a.pmtiles");
+        assert!(redirect_allowed(
+            &plain,
+            &url("https://example.org/a.pmtiles")
+        ));
+        let osm = url("https://tile.openstreetmap.org/a");
+        assert!(!redirect_allowed(
+            &osm,
+            &url("https://tile.openstreetmap.org/b")
+        ));
+    }
+
+    #[test]
+    fn what_is_shown_holds_no_credentials() {
+        let url = Url::parse("https://me:secret@example.org/a.pmtiles?key=secret#x").unwrap();
+        assert_eq!(public_id(&url), "https://example.org/a.pmtiles");
+    }
 
     #[test]
     fn user_agent_rules() {

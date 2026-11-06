@@ -60,6 +60,8 @@ async fn within_finds_by_area_also_over_the_antimeridian() {
         create(&p, "Paris", 2.35, 48.85).await;
         create(&p, "Suva", 178.44, -18.14).await;
         create(&p, "Apia", -171.76, -13.83).await;
+        create(&p, "Lima", -77.0, -12.0).await; // in the latitudes of the boxes below, not their longitudes
+        create(&p, "Darwin", 130.8, -12.5).await;
         let unlocated = r#"{"type":"Feature","geometry":null,"properties":{"name":"Nowhere"}}"#;
         create_text(&p, unlocated).await;
 
@@ -71,6 +73,7 @@ async fn within_finds_by_area_also_over_the_antimeridian() {
         assert_eq!(found([100.0, 0.0, 110.0, 10.0]).await, "");
         assert_eq!(found([170.0, -30.0, -170.0, 0.0]).await, "Apia,Suva");
         assert_eq!(found([175.0, -30.0, 179.0, 0.0]).await, "Suva");
+        assert_eq!(found([-180.0, -30.0, -170.0, 0.0]).await, "Apia");
     })
     .await;
 }

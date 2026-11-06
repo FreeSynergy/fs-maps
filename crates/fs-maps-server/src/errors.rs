@@ -29,8 +29,12 @@ pub(crate) fn rpc_error(e: Error) -> capnp::Error {
         | Error::GeoUri(_)
         | Error::GeoJson(_) => invalid(text),
         Error::Policy(_) => Problem::new(POLICY, "Forbidden by policy", text, 403).into_error(),
-        Error::TooManyTiles { .. } => too_large(text),
-        Error::Pmtiles(_) | Error::Http(_) | Error::Io { .. } => {
+        Error::TooManyTiles { .. } | Error::TileTooLarge { .. } => too_large(text),
+        Error::Pmtiles(_)
+        | Error::Http(_)
+        | Error::Io { .. }
+        | Error::Archive(_)
+        | Error::SourceUnavailable(_) => {
             Problem::new(SOURCE_FAILED, "The tile source failed", text, 502).into_error()
         }
         Error::Store(e) => store_error(&e, text),
