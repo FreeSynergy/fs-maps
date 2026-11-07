@@ -2,7 +2,7 @@
 
 #![allow(dead_code)] // each test file uses a different subset
 
-use fs_store::TursoStore;
+use fs_objects::TursoStore;
 use serde_json::{Value, json};
 
 pub const ME: &str = "https://example.org/actors/a";
@@ -21,6 +21,6 @@ pub fn polygon(name: &str, ring: &[[f64; 2]]) -> Value {
            "properties":{"name":name}})
 }
 
-pub fn names(places: &[fs_store::StoredObject]) -> Vec<&str> {
+pub fn names(places: &[fs_objects::StoredObject]) -> Vec<&str> {
     places.iter().map(|p| p.envelope.name.as_str()).collect()
 }

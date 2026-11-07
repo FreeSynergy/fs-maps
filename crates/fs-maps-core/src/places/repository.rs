@@ -4,8 +4,8 @@
 //! the whole `Store` facade), so any backend or test double fits. The writes are in `write.rs`,
 //! the searches in `search.rs`, the [`Places`](super::Places) trait in `book.rs`.
 
-use fs_store::ObjectId;
-use fs_store::traits::{ObjectQuery, ObjectRepository};
+use fs_objects::ObjectId;
+use fs_objects::traits::{ObjectQuery, ObjectRepository};
 use serde_json::Value;
 
 use super::adapter::feature_from_place;

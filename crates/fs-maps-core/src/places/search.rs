@@ -4,7 +4,7 @@
 //! that the store runs, so nothing is read into memory beyond the requested page. The area test
 //! is a set of index conditions (see `bounds`), the name test a name / index `Contains`.
 
-use fs_store::{Cond, Op, Order, Query, StoredObject};
+use fs_objects::{Cond, Op, Order, Query, StoredObject};
 
 use super::adapter::PLACE_TYPE;
 use super::bounds::Area;

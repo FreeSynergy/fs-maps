@@ -11,7 +11,7 @@ use fs_maps_core::{
     Area, CacheConfig, CachedSource, Capabilities, Error, MemorySource, Paging, PlaceRepository,
     Places, Result, StoreView, TileCache, TileSource,
 };
-use fs_store::{ObjectId, Store, StoredObject};
+use fs_objects::{ObjectId, Store, StoredObject};
 
 /// A read-only provider, for example a fixed list of places it cannot write to.
 struct ReadOnly;

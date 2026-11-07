@@ -16,8 +16,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 url = "2"
 # The contract and the provider rule (ADR 0045).
-fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.5.0" }
-fs-store = { git = "https://github.com/FreeSynergy/fs-store", tag = "v0.2.0" }
+fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.45.0" }
+fs-objects = { git = "https://github.com/FreeSynergy/fs-objects", tag = "v0.5.0" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

@@ -1,4 +1,4 @@
-//! Places: GeoJSON (RFC 7946) `Feature` <-> `fs-store` object of AS2 type `Place`.
+//! Places: GeoJSON (RFC 7946) `Feature` <-> `fs-objects` object of AS2 type `Place`.
 //!
 //! Pattern: Adapter (+ Repository on top) — `adapter` converts, `geometry`/`name` validate and
 //! extract, `bounds` turns boxes into store index keys and conditions, `repository` / `write` /

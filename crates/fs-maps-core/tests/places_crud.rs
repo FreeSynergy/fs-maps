@@ -4,7 +4,7 @@ mod common;
 
 use common::{ME, names, point, polygon, store};
 use fs_maps_core::{Error, Paging, PlaceRepository, Places};
-use fs_store::ObjectId;
+use fs_objects::ObjectId;
 use serde_json::json;
 
 #[tokio::test]
@@ -73,7 +73,7 @@ async fn update_replaces_content_and_keeps_the_envelope() {
 
 #[tokio::test]
 async fn delete_removes_a_place_and_is_undoable() {
-    use fs_store::Store;
+    use fs_objects::Store;
     let s = store().await;
     let repo = PlaceRepository::new(&s, ME);
     let a = repo.create(&point("A", 1.0, 1.0)).await.unwrap();

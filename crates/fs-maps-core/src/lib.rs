@@ -7,7 +7,7 @@
 //! * [`TileSource`]: tiles on demand, one at a time.
 //! * [`TileCache`]: size-limited on-disk LRU cache of raw MVT tiles.
 //! * [`RegionDownload`]: bbox + zoom range -> local PMTiles package for offline use.
-//! * [`places`]: GeoJSON `Feature` <-> `fs-store` objects (AS2 `Place`); [`geouri`]: RFC 5870.
+//! * [`places`]: GeoJSON `Feature` <-> `fs-objects` objects (AS2 `Place`); [`geouri`]: RFC 5870.
 //!
 //! See `DESIGN.md` and `RESEARCH.md` (usage policies!).
 

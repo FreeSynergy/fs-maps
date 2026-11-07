@@ -18,7 +18,7 @@ Version 0.1.0 (first tag). `Places` is the provider of `places.capnp` (ADR 0045,
 | `TileCache`: disk, hard byte limit, LRU (recency persisted via mtime), 7-day TTL, atomic writes, rescan on open | done, model-based property test against a reference LRU |
 | `CachedSource<S>` wrapper | done |
 | `RegionDownload` (Facade; `DownloadCommand`, `TilePlan` iterator, `ProgressObserver`): exact tile count + sampled size estimate before download, tile limit (200 000), progress + cancel callback, writes a **PMTiles v3 package** (MVT, gzip, Hilbert order, bounds/metadata/attribution) via the `pmtiles` writer | done |
-| `places`: `PlaceRepository` over `ObjectRepository` + GeoJSON `Feature` <-> `fs-store` `StoredObject` (type `Place`, `application/geo+json`, name from `properties.name`/`name:en`/`name:*`/`title`, index `geometry_type`, `bbox`, `geo`) | done, tested incl. real `TursoStore` |
+| `places`: `PlaceRepository` over `ObjectRepository` + GeoJSON `Feature` <-> `fs-objects` `StoredObject` (type `Place`, `application/geo+json`, name from `properties.name`/`name:en`/`name:*`/`title`, index `geometry_type`, `bbox`, `geo`) | done, tested incl. real `TursoStore` |
 | Trait `Places` (`places/contract.rs`): required `capabilities`, `get`, `list`; defaults answering `Unsupported`: `create`, `update`, `delete`, `within`, `find_by_name`. `PlaceRepository` implements all; it reports every id of the schema except `place.subscribe` ("not built yet; it is possible") | done |
 | `PlaceRepository` over `ObjectRepository` + `ObjectQuery` (still borrows its store: `new(&store, actor)`; behind an `Arc<dyn Store>` use `StoreView::new(&*store)`); create sets context `places` and IRI `https://<instance>/places/<id>` (`with_instance`); update keeps id, `published`, IRI, attribution | done |
 | `within(Area, Paging)`: **one store query**; the four edges of the geometry's bounding box are index keys (`lon_min`, `lon_max`, `lat_min`, `lat_max`: fixed-width decimals of 1e-7 degrees so the store's binary text order is numeric order), paged by the store. Overlap = bounding box of the geometry meets the area, edges touching count; points, lines, polygons alike; no geometry = never found | done, tested |
@@ -55,7 +55,7 @@ declare and re-export, every module doc has a `Pattern:` line. Callers depend on
 | `places/bounds.rs` | Specification | `Area` turns itself into store conditions; edge keys of a box |
 | `places/store_view.rs` | Adapter | `&dyn Store` as the two narrow traits |
 | `places/adapter.rs` | Adapter | GeoJSON `Feature` <-> `StoredObject` (type `Place`) |
-| `places/repository.rs` | Repository over Store | `PlaceRepository` depends on `fs_store::traits::ObjectRepository` only |
+| `places/repository.rs` | Repository over Store | `PlaceRepository` depends on `fs_objects::traits::ObjectRepository` only |
 | `places/{geometry,name}.rs` | Interpreter-style recursion / Strategy | geometry validation; name fallback order |
 | `tile/*`, `geouri.rs` | Newtype / Parser | validated `Tile`, `BBox`, `GeoUri` |
 | `testutil/*` | Fake | loopback range server + PMTiles fixture |

@@ -7,7 +7,7 @@
 //! same way, so overlap is closed and never misses a place; it may add one that is 1e-7 degrees
 //! away. A place overlaps an area when the bounding box of its geometry does (not the geometry).
 
-use fs_store::{Cond, IndexFields, Op};
+use fs_objects::{Cond, IndexFields, Op};
 
 use crate::error::{Error, Result};
 use crate::tile::BBox;

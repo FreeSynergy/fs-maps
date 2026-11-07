@@ -1,4 +1,4 @@
-//! GeoJSON `Feature` <-> `fs-store` object of AS2 type `Place`.
+//! GeoJSON `Feature` <-> `fs-objects` object of AS2 type `Place`.
 //!
 //! Pattern: Adapter — the foreign GeoJSON model on one side, `StoredObject` on the other. The
 //! stored `content` is the Feature itself (`application/geo+json`, ADR 0020/0032); the envelope
@@ -6,7 +6,7 @@
 //! `bbox` (`minlon,minlat,maxlon,maxlat`), the sortable edge keys of `bounds` (for `within`),
 //! every name in `name` (for `findByName`) and, for points, `geo` (an RFC 5870 URI).
 
-use fs_store::{Envelope, StoredObject};
+use fs_objects::{Envelope, StoredObject};
 use serde_json::{Map, Value};
 
 use super::bounds::bbox_index;
@@ -42,7 +42,7 @@ pub fn place_from_feature(feature: &Value, attributed_to: Option<&str>) -> Resul
     let Some(name) = feature_name(&props) else {
         return gj("feature has no usable name (properties.name / name:* / title)");
     };
-    let mut index = fs_store::IndexFields::new();
+    let mut index = fs_objects::IndexFields::new();
     if let Some(g) = feature.get("geometry").filter(|g| !g.is_null()) {
         let (t, pts) = geometry_positions(g)?;
         index.insert("geometry_type".into(), vec![t.clone()]);
