@@ -12,7 +12,7 @@
 //! a geometry that is only that pole is indexed over all longitudes. One that merely reaches the pole
 //! keeps its own longitudes, its bounding box says so.
 
-use fs_store::{Cond, IndexFields, Op};
+use fs_objects::{Cond, IndexFields, Op};
 
 use crate::error::{Error, Result};
 use crate::tile::BBox;

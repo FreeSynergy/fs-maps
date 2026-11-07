@@ -7,7 +7,7 @@ use common::{
     with_server, with_store,
 };
 use fs_interfaces::rpc::{MAX_INTAKE_BYTES, MAX_ITEM_BYTES, write_object_id};
-use fs_store::{Envelope, StoredObject};
+use fs_objects::{Envelope, StoredObject};
 use serde_json::{Value, json};
 
 const ENVELOPE_ROOM: usize = 4096;

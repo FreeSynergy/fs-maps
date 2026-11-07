@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fs_interfaces::Capabilities;
-use fs_store::{ObjectId, Store, StoredObject};
+use fs_objects::{ObjectId, Store, StoredObject};
 use serde_json::Value;
 use tokio::sync::Mutex;
 

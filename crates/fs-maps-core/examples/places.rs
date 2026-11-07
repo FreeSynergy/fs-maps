@@ -3,7 +3,7 @@
 //! Pattern: Facade consumer — everything goes through the `Places` trait.
 
 use fs_maps_core::{Area, Paging, PlaceRepository, Places};
-use fs_store::TursoStore;
+use fs_objects::TursoStore;
 use serde_json::json;
 
 #[tokio::main]

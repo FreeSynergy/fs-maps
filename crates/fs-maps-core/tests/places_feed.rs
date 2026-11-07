@@ -9,7 +9,7 @@ use fs_maps_core::{
     Area, Error, NoSource, Paging, PlaceChange, PlaceFeed, PlaceListener, Places, StorePlaces,
     TileSource,
 };
-use fs_store::{ObjectId, Store};
+use fs_objects::{ObjectId, Store};
 
 #[derive(Default)]
 struct Seen(Mutex<Vec<PlaceChange>>);

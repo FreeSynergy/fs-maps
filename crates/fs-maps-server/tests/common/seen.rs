@@ -7,7 +7,7 @@ use capnp_rpc::new_client;
 use fs_interfaces::common_capnp::{change, change_listener};
 use fs_interfaces::places_capnp::places;
 use fs_interfaces::rpc::{read_envelope, read_object_id};
-use fs_store::ObjectId;
+use fs_objects::ObjectId;
 
 /// One call on the listener.
 #[derive(Clone, Debug, PartialEq, Eq)]

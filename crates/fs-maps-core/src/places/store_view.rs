@@ -4,8 +4,8 @@
 //! `ObjectRepository` + `ObjectQuery` only: `PlaceRepository::new(&StoreView::new(&*store), actor)`.
 
 use async_trait::async_trait;
-use fs_store::traits::{ObjectQuery, ObjectRepository};
-use fs_store::{Activity, LogEntry, ObjectId, Query, Result, Store, StoredObject};
+use fs_objects::traits::{ObjectQuery, ObjectRepository};
+use fs_objects::{Activity, LogEntry, ObjectId, Query, Result, Store, StoredObject};
 
 /// Borrowed store facade.
 pub struct StoreView<'a>(&'a dyn Store);

@@ -10,7 +10,7 @@ use common::{create, delete, point, serving, store_places, with_server};
 use fs_interfaces::Capabilities;
 use fs_interfaces::rpc::{FEED_ENDED_PROBLEM_TYPE, write_object_id};
 use fs_maps_core::{Error, NoSource, Paging, Places, Result, StorePlaces};
-use fs_store::{ObjectId, StoredObject};
+use fs_objects::{ObjectId, StoredObject};
 use serde_json::Value;
 
 #[tokio::test(flavor = "current_thread")]
@@ -111,7 +111,7 @@ impl Places for Reads {
 #[tokio::test(flavor = "current_thread")]
 async fn a_read_that_fails_ends_the_feed_and_says_so() {
     let places = store_places().await;
-    let failing = || Err(Error::Store(fs_store::Error::Backend("disk gone".into())));
+    let failing = || Err(Error::Store(fs_objects::Error::Backend("disk gone".into())));
     let provider = Arc::new(Reads(places.clone(), failing));
     serving(provider, places, Arc::new(NoSource), |maps| async move {
         let p = maps.places;

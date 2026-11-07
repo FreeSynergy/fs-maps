@@ -11,7 +11,7 @@ use fs_interfaces::common_capnp::change_listener;
 use fs_interfaces::rpc::{Problem, is_unimplemented, write_object_id};
 use fs_interfaces::{Capabilities, Support, UNSUPPORTED_PROBLEM_TYPE};
 use fs_maps_core::{NoSource, Paging, Places, Result};
-use fs_store::{ObjectId, StoredObject};
+use fs_objects::{ObjectId, StoredObject};
 
 fn offered(capability: &str) -> Support {
     Support {

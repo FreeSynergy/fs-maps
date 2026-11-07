@@ -6,7 +6,7 @@
 
 use fs_interfaces::rpc::{Problem, failed, too_large, unsupported};
 use fs_maps_core::Error;
-use fs_store::Error as Store;
+use fs_objects::Error as Store;
 
 const NOT_FOUND: &str = "https://freesynergy.net/problems/places/not-found";
 const CONFLICT: &str = "https://freesynergy.net/problems/places/conflict";
@@ -77,7 +77,7 @@ fn invalid(detail: String) -> capnp::Error {
 #[cfg(test)]
 mod tests {
     use fs_interfaces::rpc::TOO_LARGE;
-    use fs_store::ObjectId;
+    use fs_objects::ObjectId;
 
     use super::*;
 

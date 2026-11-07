@@ -10,7 +10,7 @@ use common::seen::{Seen, Told, watch};
 use common::{point, serving, store_places};
 use fs_interfaces::Capabilities;
 use fs_maps_core::{NoSource, Paging, Places, Result, StorePlaces};
-use fs_store::{ObjectId, StoredObject};
+use fs_objects::{ObjectId, StoredObject};
 use serde_json::Value;
 
 /// The store-backed provider, a moment slower: time for the client to go away.

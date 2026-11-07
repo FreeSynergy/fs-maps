@@ -11,7 +11,7 @@ use fs_interfaces::places_capnp::{place, place_page, places, tile_source};
 use fs_interfaces::rpc::{Problem, bind_socket, connect, read_envelope, serve, write_object_id};
 use fs_maps_core::{NoSource, PlaceFeed, Places, StorePlaces, TileSource};
 use fs_maps_server::MapsServer;
-use fs_store::{Envelope, ObjectId, Store, TursoStore};
+use fs_objects::{Envelope, ObjectId, Store, TursoStore};
 
 pub const ME: &str = "https://local.invalid/users/owner";
 

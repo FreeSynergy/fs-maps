@@ -7,7 +7,7 @@ use common::{
     with_server, with_store,
 };
 use fs_interfaces::rpc::write_object_id;
-use fs_store::{Envelope, ObjectId, StoredObject};
+use fs_objects::{Envelope, ObjectId, StoredObject};
 use serde_json::json;
 
 #[tokio::test(flavor = "current_thread")]

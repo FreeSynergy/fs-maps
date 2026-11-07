@@ -18,7 +18,7 @@ Version 0.2.0: `fs-maps-server`, the contract `places.capnp` over a Unix socket;
 | `TileCache`: disk, hard byte limit, LRU (recency persisted via mtime), 7-day TTL, atomic writes, rescan on open | done, model-based property test against a reference LRU |
 | `CachedSource<S>` wrapper | done |
 | `RegionDownload` (Facade; `DownloadCommand`, `TilePlan` iterator, `ProgressObserver`): exact tile count + sampled size estimate before download, tile limit (200 000), progress + cancel callback, writes a **PMTiles v3 package** (MVT, gzip, Hilbert order, bounds/metadata/attribution) via the `pmtiles` writer | done |
-| `places`: `PlaceRepository` over `ObjectRepository` + GeoJSON `Feature` <-> `fs-store` `StoredObject` (type `Place`, `application/geo+json`, name from `properties.name`/`name:en`/`name:*`/`title`, index `geometry_type`, `bbox`, `geo`) | done, tested incl. real `TursoStore` |
+| `places`: `PlaceRepository` over `ObjectRepository` + GeoJSON `Feature` <-> `fs-objects` `StoredObject` (type `Place`, `application/geo+json`, name from `properties.name`/`name:en`/`name:*`/`title`, index `geometry_type`, `bbox`, `geo`) | done, tested incl. real `TursoStore` |
 | Trait `Places` (`places/contract.rs`): required `capabilities`, `get`, `list`; defaults answering `Unsupported`: `create`, `update`, `delete`, `within`, `find_by_name`. `PlaceRepository` implements all; it reports every id of the schema except `place.subscribe` (a borrowed repository has no live feed) | done |
 | `StorePlaces` (`places/provider.rs`): owns an `Arc<dyn Store>`, so it can live behind `Arc<dyn Places>`; runs each call through a `PlaceRepository`; writes run one at a time (an update reads, then writes: a delete between the two was undone by it, reproduced in `tests/places_feed.rs`); reports all six ids of the schema | done |
 | Trait `PlaceFeed` (`places/feed.rs`, Observer: `subscribe(listener)` -> `Subscription`; `Created` / `Updated` / `Deleted`), told after the commit, by `StorePlaces` only | done, draft |
@@ -61,7 +61,7 @@ declare and re-export, every module doc has a `Pattern:` line. Callers depend on
 | `places/bounds.rs` | Specification | `Area` turns itself into store conditions; edge keys of a box |
 | `places/store_view.rs` | Adapter | `&dyn Store` as the two narrow traits |
 | `places/adapter.rs` | Adapter | GeoJSON `Feature` <-> `StoredObject` (type `Place`) |
-| `places/repository.rs` | Repository over Store | `PlaceRepository` depends on `fs_store::traits::ObjectRepository` only |
+| `places/repository.rs` | Repository over Store | `PlaceRepository` depends on `fs_objects::traits::ObjectRepository` only |
 | `places/{geometry,name}.rs` | Interpreter-style recursion / Strategy | geometry validation; name fallback order |
 | `tile/*`, `geouri.rs` | Newtype / Parser | validated `Tile`, `BBox`, `GeoUri` |
 | `testutil/*` | Fake | loopback range server + PMTiles fixture |

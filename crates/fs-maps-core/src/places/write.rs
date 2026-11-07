@@ -4,7 +4,7 @@
 //! in the adapter), complete the envelope (context, IRI), write. An update keeps the stored
 //! envelope (id, `published`, audience) and takes only name and content from the new feature.
 
-use fs_store::{ObjectId, StoredObject};
+use fs_objects::{ObjectId, StoredObject};
 use serde_json::Value;
 
 use super::adapter::{PLACE_TYPE, place_from_feature};

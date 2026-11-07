@@ -10,7 +10,7 @@ use fs_interfaces::rpc::{
 use fs_interfaces::{common_capnp, places_capnp};
 use fs_maps_core::Area;
 use fs_maps_core::places::feature_from_place;
-use fs_store::StoredObject;
+use fs_objects::StoredObject;
 use serde_json::Value;
 
 use crate::errors::{rpc_error, stored_data};

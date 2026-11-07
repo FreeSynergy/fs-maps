@@ -799,7 +799,7 @@ dependencies = [
  "capnp",
  "capnp-rpc",
  "chrono",
- "fs-store",
+ "fs-objects",
  "futures",
  "rustix 1.1.6",
  "tokio",
@@ -816,7 +816,7 @@ dependencies = [
  "bytes",
  "flate2",
  "fs-interfaces",
- "fs-store",
+ "fs-objects",
  "pmtiles",
  "proptest",
  "serde",
@@ -836,16 +836,16 @@ dependencies = [
  "capnp-rpc",
  "fs-interfaces",
  "fs-maps-core",
- "fs-store",
+ "fs-objects",
  "serde_json",
  "tempfile",
  "tokio",
 ]
 
 [[package]]
-name = "fs-store"
+name = "fs-objects"
 version = "0.2.0"
-source = "git+https://github.com/FreeSynergy/fs-store?tag=v0.2.0#bf919bce0197e115f011d9192f9f2757b2b551e2"
+source = "git+https://github.com/FreeSynergy/fs-objects?tag=v0.2.0#bf919bce0197e115f011d9192f9f2757b2b551e2"
 dependencies = [
  "async-trait",
  "base64 0.22.1",

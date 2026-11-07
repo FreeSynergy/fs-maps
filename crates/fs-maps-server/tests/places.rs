@@ -8,7 +8,7 @@ use common::{
 };
 use fs_interfaces::places_capnp::places;
 use fs_interfaces::rpc::write_object_id;
-use fs_store::{Envelope, ObjectId, StoredObject};
+use fs_objects::{Envelope, ObjectId, StoredObject};
 use serde_json::{Value, json};
 
 fn parsed(text: &str) -> Value {

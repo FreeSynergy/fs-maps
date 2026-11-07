@@ -5,7 +5,7 @@ mod common;
 use common::{create, create_text, delete, list_all, page_of, point, with_server};
 use fs_interfaces::places_capnp::places;
 use fs_interfaces::rpc::{MAX_PAGE_BYTES, write_object_id};
-use fs_store::ObjectId;
+use fs_objects::ObjectId;
 
 fn set_box(mut area: fs_interfaces::places_capnp::b_box::Builder<'_>, b: [f64; 4]) {
     area.set_west(b[0]);

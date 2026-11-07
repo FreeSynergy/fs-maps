@@ -10,7 +10,7 @@ use std::sync::Arc;
 use fs_interfaces::rpc::{ServerOptions, prepare_data_dir, run_until_signal};
 use fs_maps_core::StorePlaces;
 use fs_maps_server::{MapsServer, TileConfig, open_tiles};
-use fs_store::{Store, TursoStore};
+use fs_objects::{Store, TursoStore};
 
 fn main() {
     let options = ServerOptions::from_env_or_exit("maps");
