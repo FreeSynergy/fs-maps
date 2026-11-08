@@ -3,6 +3,8 @@ resolver = "2"
 members = ["crates/fs-maps-core", "crates/fs-maps-server", "crates/fs-maps-app", "crates/fs-maps"]
 
 [workspace.package]
+authors = ["FreeSynergy <support@freesynergy.net>"]
+repository = "https://github.com/FreeSynergy/fs-maps"
 version = "0.0.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
