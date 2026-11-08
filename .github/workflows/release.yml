@@ -1,0 +1,22 @@
+name: release
+on:
+  push: { tags: ["v*"] }
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  packages: write
+jobs:
+  release:
+    uses: FreeSynergy/fs-release/.github/workflows/release.yml@main
+    with:
+      binaries: fs-maps
+      cargo-package: fs-maps
+      name: fs-maps
+      kind: app
+      app-id: net.freesynergy.Maps
+      macos: false
+      windows-targets: ""   # Unix sockets and Unix paths for now
+    secrets:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}

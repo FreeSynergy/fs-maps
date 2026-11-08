@@ -9,10 +9,6 @@ rust-version.workspace = true
 [lib]
 name = "fs_maps_server"
 
-[[bin]]
-name = "fs-maps-server"
-path = "src/main.rs"
-
 [dependencies]
 fs-maps-core = { path = "../fs-maps-core" }
 fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.1", features = ["rpc"] }

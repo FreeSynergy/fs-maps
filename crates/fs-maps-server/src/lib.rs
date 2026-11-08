@@ -13,9 +13,11 @@
 mod errors;
 mod feed;
 mod places_service;
+mod program;
 mod sources;
 mod tiles_service;
 mod wire;
 
 pub use places_service::MapsServer;
+pub use program::{HELP, ServeError, serve};
 pub use sources::{TileConfig, open_tiles};

@@ -1,0 +1,23 @@
+[package]
+name = "fs-maps-app"
+description = "The maps program of FreeSynergy, window: places as a list and a sheet (name, position, description), over the Cap'n Proto socket; on fs-components. No map view yet."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.1", features = ["rpc"] }
+fs-components-app = { git = "https://github.com/FreeSynergy/fs-components", rev = "fc00887d2c78a41684dbd68507b740fdef32def0" }
+fs-components-workbenches = { git = "https://github.com/FreeSynergy/fs-components", rev = "fc00887d2c78a41684dbd68507b740fdef32def0" }
+capnp = "0.27"
+uuid = "1"
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
+
+[dev-dependencies]
+fs-maps-core = { path = "../fs-maps-core" }
+fs-maps-server = { path = "../fs-maps-server" }
+fs-objects = { git = "https://github.com/FreeSynergy/fs-objects", tag = "v0.0.1" }
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }

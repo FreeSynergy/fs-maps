@@ -1,0 +1,29 @@
+[package]
+name = "fs-maps"
+description = "FreeSynergy.Maps: places and map tiles. Without arguments the window opens; `serve` runs the server."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "fs-maps"
+path = "src/main.rs"
+
+[features]
+default = ["gui"]
+# The window (Blinc). Without it the binary has the server only: `cargo build --no-default-features`.
+gui = ["dep:fs-maps-app"]
+
+[dependencies]
+fs-maps-server = { path = "../fs-maps-server" }
+fs-maps-app = { path = "../fs-maps-app", optional = true }
+
+[dev-dependencies]
+fs-maps-core = { path = "../fs-maps-core" }
+fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.1", features = ["rpc"] }
+fs-objects = { git = "https://github.com/FreeSynergy/fs-objects", tag = "v0.0.1" }
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }
+capnp = "0.27"
+async-trait = "0.1"

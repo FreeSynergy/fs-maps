@@ -38,7 +38,8 @@ async fn under_load(bytes: &[u8], calls: usize) -> (usize, usize) {
     let (socket, data) = (dir.path().join("maps.sock"), dir.path().join("data"));
     let file = dir.path().join("hostile.pmtiles");
     std::fs::write(&file, bytes).unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_fs-maps-server"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_fs-maps"))
+        .arg("serve")
         .arg("--socket")
         .arg(&socket)
         .arg("--data")

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/fs-maps-core", "crates/fs-maps-server"]
+members = ["crates/fs-maps-core", "crates/fs-maps-server", "crates/fs-maps-app", "crates/fs-maps"]
 
 [workspace.package]
 version = "0.0.1"

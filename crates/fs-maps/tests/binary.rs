@@ -10,8 +10,9 @@ use fs_interfaces::rpc::{connect, read_envelope};
 use fs_maps_core::testutil::write_fixture;
 
 fn program(socket: &Path, data: &Path) -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_fs-maps-server"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_fs-maps"));
     command
+        .arg("serve")
         .arg("--socket")
         .arg(socket)
         .arg("--data")

@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 fn program(socket: &Path, data: &Path) -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_fs-maps-server"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_fs-maps"));
     command
+        .arg("serve")
         .arg("--socket")
         .arg(socket)
         .arg("--data")
