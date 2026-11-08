@@ -1,4 +1,4 @@
-//! The GeoJSON feature of a place, and the form made of it: reading, and putting the changes back.
+//! The `GeoJSON` feature of a place, and the form made of it: reading, and putting the changes back.
 //!
 //! Pattern: Adapter (pure functions) — no call to the server here; what the window shows and changes of
 //! a feature, and what it leaves alone.
