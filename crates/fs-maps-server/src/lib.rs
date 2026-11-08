@@ -12,6 +12,7 @@
 
 mod errors;
 mod feed;
+pub mod lease;
 mod places_service;
 mod program;
 mod sources;

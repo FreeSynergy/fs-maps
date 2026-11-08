@@ -112,6 +112,13 @@ pub fn run(words: &[String]) -> Result<(), String> {
 /// windows use it too) and wait for it. A socket given with `--socket` is never answered by starting
 /// anything.
 fn connect_or_start(socket: &Path, may_start: bool) -> Result<PlacesRemote, String> {
+    // This window is a user of the server for as long as it lives: the shared lock on the lease is
+    // let go by the system when the process ends. A server this window starts ends itself when no
+    // window holds the lease any more (a server started by hand has none).
+    let lease = socket.with_extension("lease");
+    if may_start {
+        hold_lease(&lease);
+    }
     let first = PlacesRemote::connect(socket);
     if first.is_ok() || !may_start {
         return first;
@@ -124,6 +131,8 @@ fn connect_or_start(socket: &Path, may_start: bool) -> Result<PlacesRemote, Stri
     let mut server = std::process::Command::new(me);
     server
         .arg("serve")
+        .arg("--lease")
+        .arg(&lease)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(log_file.map_or_else(std::process::Stdio::null, std::process::Stdio::from));
@@ -152,4 +161,18 @@ fn connect_or_start(socket: &Path, may_start: bool) -> Result<PlacesRemote, Stri
         let _ = child.wait();
     });
     first
+}
+
+/// Hold the shared lock on `path` until this process ends.
+fn hold_lease(path: &Path) {
+    static HELD: std::sync::OnceLock<std::fs::File> = std::sync::OnceLock::new();
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path);
+    if let Ok(file) = file
+        && file.lock_shared().is_ok()
+    {
+        let _ = HELD.set(file);
+    }
 }

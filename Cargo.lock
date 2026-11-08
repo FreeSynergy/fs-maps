@@ -1671,7 +1671,7 @@ dependencies = [
 
 [[package]]
 name = "fs-maps"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "async-trait",
  "capnp",
@@ -1686,7 +1686,7 @@ dependencies = [
 
 [[package]]
 name = "fs-maps-app"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "capnp",
  "fs-components-app",
@@ -1703,7 +1703,7 @@ dependencies = [
 
 [[package]]
 name = "fs-maps-core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "async-trait",
  "brotli 8.0.4",
@@ -1723,7 +1723,7 @@ dependencies = [
 
 [[package]]
 name = "fs-maps-server"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "async-trait",
  "capnp",
@@ -1731,6 +1731,7 @@ dependencies = [
  "fs-interfaces",
  "fs-maps-core",
  "fs-objects",
+ "rustix 1.1.6",
  "serde_json",
  "tempfile",
  "tokio",

@@ -5,7 +5,7 @@ members = ["crates/fs-maps-core", "crates/fs-maps-server", "crates/fs-maps-app",
 [workspace.package]
 authors = ["FreeSynergy <support@freesynergy.net>"]
 repository = "https://github.com/FreeSynergy/fs-maps"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-rust-version = "1.88"
+rust-version = "1.89"
