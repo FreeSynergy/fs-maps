@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await?;
     println!(
-        "package {}: {} tiles, {} bytes on disk",
+        "package \"{}\": {} tiles, {} bytes on disk",
         rep.path.display(),
         rep.tiles_written,
         rep.file_bytes
