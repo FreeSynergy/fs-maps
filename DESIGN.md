@@ -7,7 +7,7 @@ Evidence for all policy decisions: `RESEARCH.md` (2026-11-05). Decisions: ADR 00
 
 ## State
 
-Version 0.3.0: `fs-maps-server`, the contract `places.capnp` over a Unix socket; `StorePlaces`, the owning provider with the live feed; `fs-interfaces` v0.32.0. Before, in 0.1: `Places` is the provider of `places.capnp` (ADR 0045, 0050): trait with every method, `Unsupported` defaults, `Capabilities`; `TileSource` also reports `Capabilities`. Earlier: ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests before the provider work, all unchanged; 46 now).
+Version 0.3.0: `fs-maps-server`, the contract `places.capnp` over a Unix socket; `StorePlaces`, the owning provider with the live feed; `fs-interfaces` v0.45.0. Before, in 0.1: `Places` is the provider of `places.capnp` (ADR 0045, 0050): trait with every method, `Unsupported` defaults, `Capabilities`; `TileSource` also reports `Capabilities`. Earlier: ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests before the provider work, all unchanged; 46 now).
 
 | Area | State |
 |---|---|
