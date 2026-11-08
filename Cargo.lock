@@ -202,7 +202,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
  "x11rb",
 ]
 
@@ -1073,7 +1073,7 @@ checksum = "fe6d2e5af09e8c8ad56c969f2157a3d4238cebc7c55f0a517728c38f7b200f81"
 dependencies = [
  "serde",
  "termcolor",
- "unicode-width 0.1.14",
+ "unicode-width 0.2.3",
 ]
 
 [[package]]
@@ -1582,8 +1582,8 @@ dependencies = [
 
 [[package]]
 name = "fs-components-app"
-version = "0.0.1"
-source = "git+https://github.com/FreeSynergy/fs-components?rev=fc00887d2c78a41684dbd68507b740fdef32def0#fc00887d2c78a41684dbd68507b740fdef32def0"
+version = "0.0.2"
+source = "git+https://github.com/FreeSynergy/fs-components?tag=v0.0.2#ba60f1fbf42c06e7a2178ccc626bc1da52050e3b"
 dependencies = [
  "blinc_app",
  "blinc_cn",
@@ -1596,20 +1596,20 @@ dependencies = [
 
 [[package]]
 name = "fs-components-primitives"
-version = "0.0.1"
-source = "git+https://github.com/FreeSynergy/fs-components?rev=fc00887d2c78a41684dbd68507b740fdef32def0#fc00887d2c78a41684dbd68507b740fdef32def0"
+version = "0.0.2"
+source = "git+https://github.com/FreeSynergy/fs-components?tag=v0.0.2#ba60f1fbf42c06e7a2178ccc626bc1da52050e3b"
 dependencies = [
  "blinc_cn",
  "blinc_core",
  "blinc_layout",
  "blinc_theme",
- "fs-interfaces 0.52.0",
+ "fs-interfaces",
 ]
 
 [[package]]
 name = "fs-components-render"
-version = "0.0.1"
-source = "git+https://github.com/FreeSynergy/fs-components?rev=fc00887d2c78a41684dbd68507b740fdef32def0#fc00887d2c78a41684dbd68507b740fdef32def0"
+version = "0.0.2"
+source = "git+https://github.com/FreeSynergy/fs-components?tag=v0.0.2#ba60f1fbf42c06e7a2178ccc626bc1da52050e3b"
 dependencies = [
  "blinc_app",
  "blinc_cn",
@@ -1623,8 +1623,8 @@ dependencies = [
 
 [[package]]
 name = "fs-components-widgets"
-version = "0.0.1"
-source = "git+https://github.com/FreeSynergy/fs-components?rev=fc00887d2c78a41684dbd68507b740fdef32def0#fc00887d2c78a41684dbd68507b740fdef32def0"
+version = "0.0.2"
+source = "git+https://github.com/FreeSynergy/fs-components?tag=v0.0.2#ba60f1fbf42c06e7a2178ccc626bc1da52050e3b"
 dependencies = [
  "blinc_cn",
  "blinc_core",
@@ -1639,8 +1639,8 @@ dependencies = [
 
 [[package]]
 name = "fs-components-workbenches"
-version = "0.0.1"
-source = "git+https://github.com/FreeSynergy/fs-components?rev=fc00887d2c78a41684dbd68507b740fdef32def0#fc00887d2c78a41684dbd68507b740fdef32def0"
+version = "0.0.2"
+source = "git+https://github.com/FreeSynergy/fs-components?tag=v0.0.2#ba60f1fbf42c06e7a2178ccc626bc1da52050e3b"
 dependencies = [
  "blinc_app",
  "blinc_cn",
@@ -1662,6 +1662,7 @@ dependencies = [
  "chrono",
  "fs-objects",
  "futures",
+ "idna",
  "rustix 1.1.6",
  "tokio",
  "tokio-util",
@@ -1669,21 +1670,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "fs-interfaces"
-version = "0.52.0"
-source = "git+https://github.com/FreeSynergy/fs-interfaces?rev=9a288a6#9a288a6e7a1e5400cacca1a893fcc5c519bfe3b2"
-dependencies = [
- "capnp",
- "idna",
-]
-
-[[package]]
 name = "fs-maps"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "capnp",
- "fs-interfaces 0.0.1",
+ "fs-interfaces",
  "fs-maps-app",
  "fs-maps-core",
  "fs-maps-server",
@@ -1694,12 +1686,12 @@ dependencies = [
 
 [[package]]
 name = "fs-maps-app"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "capnp",
  "fs-components-app",
  "fs-components-workbenches",
- "fs-interfaces 0.0.1",
+ "fs-interfaces",
  "fs-maps-core",
  "fs-maps-server",
  "fs-objects",
@@ -1711,13 +1703,13 @@ dependencies = [
 
 [[package]]
 name = "fs-maps-core"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "brotli 8.0.4",
  "bytes",
  "flate2",
- "fs-interfaces 0.0.1",
+ "fs-interfaces",
  "fs-objects",
  "pmtiles",
  "proptest",
@@ -1731,12 +1723,12 @@ dependencies = [
 
 [[package]]
 name = "fs-maps-server"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "capnp",
  "capnp-rpc",
- "fs-interfaces 0.0.1",
+ "fs-interfaces",
  "fs-maps-core",
  "fs-objects",
  "serde_json",
