@@ -11,6 +11,7 @@
 #![allow(clippy::must_use_candidate, clippy::module_name_repetitions)]
 
 mod adapter;
+mod feature;
 pub mod gui;
 mod remote;
 mod words;
