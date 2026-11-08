@@ -1,5 +1,6 @@
 //! The provider rule (ADR 0045): every provider has every method; what it does not offer answers
 //! an explicit "not possible", and its report says the same.
+#![allow(clippy::assert_is_empty)] // tests: plain `is_empty()` asserts read clearer than typed empty comparisons
 
 mod common;
 

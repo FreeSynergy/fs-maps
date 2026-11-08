@@ -1,4 +1,4 @@
-//! Real HTTP range requests against a loopback server serving a generated PMTiles fixture.
+//! Real HTTP range requests against a loopback server serving a generated `PMTiles` fixture.
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;

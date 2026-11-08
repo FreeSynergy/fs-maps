@@ -1,4 +1,5 @@
 //! Places: update, delete, list and get through the `Places` trait over a real `TursoStore`.
+#![allow(clippy::assert_is_empty)] // tests: plain `is_empty()` asserts read clearer than typed empty comparisons
 
 mod common;
 
@@ -43,12 +44,12 @@ async fn update_replaces_content_and_keeps_the_envelope() {
     assert_eq!(new.index["geometry_type"], ["Polygon"]);
     assert!(!new.index.contains_key("geo"), "the point index is gone");
     // The old point no longer answers a search on its old name; the new name does.
-    assert!(
+    assert_eq!(
         repo.find_by_name("Berlin", Paging::default())
             .await
             .unwrap()
-            .len()
-            == 1
+            .len(),
+        1
     );
     // Bad input and unknown ids change nothing.
     assert!(

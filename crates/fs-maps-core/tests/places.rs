@@ -1,4 +1,4 @@
-//! Places: GeoJSON <-> store adapter, validation, and the repository over a real `TursoStore`.
+//! Places: `GeoJSON` <-> store adapter, validation, and the repository over a real `TursoStore`.
 
 use fs_maps_core::places::{
     PlaceRepository, feature_bbox, feature_from_place, place_from_feature, place_geo_uri,
@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 
 fn berlin() -> Value {
     json!({"type":"Feature","id":"node/1","geometry":{"type":"Point","coordinates":[13.4050,52.5200]},
-           "properties":{"name":"Berlin","population":3700000}})
+           "properties":{"name":"Berlin","population":3_700_000}})
 }
 
 #[test]

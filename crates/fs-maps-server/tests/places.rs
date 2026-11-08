@@ -1,4 +1,5 @@
 //! Create, get, update and delete over a real socket, against the store-backed provider.
+#![allow(clippy::assert_is_empty)] // tests: plain `is_empty()` asserts read clearer than typed empty comparisons
 
 mod common;
 
@@ -115,7 +116,7 @@ async fn the_edges_of_the_world_are_places() {
             (180.0, 90.0),
             (-180.0, -90.0),
             (0.0, 0.0),
-            (179.9999999, 89.9999999),
+            (179.999_999_9, 89.999_999_9),
         ] {
             let id = create(&p, "Edge", lon, lat).await;
             let (_, feature) = get(&p, id).await.unwrap();

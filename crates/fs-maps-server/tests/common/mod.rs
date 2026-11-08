@@ -106,7 +106,7 @@ pub fn envelope_of(place: place::Reader<'_>) -> Envelope {
     read_envelope(place.get_envelope().unwrap()).unwrap()
 }
 
-/// Create a place from GeoJSON text; answers its id.
+/// Create a place from `GeoJSON` text; answers its id.
 pub async fn create_text(places: &places::Client, geojson: &str) -> ObjectId {
     let mut req = places.create_request();
     req.get().set_geojson(geojson);

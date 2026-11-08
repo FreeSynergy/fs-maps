@@ -1,4 +1,5 @@
 //! What could not come back is refused before it is stored: it would block paging forever.
+#![allow(clippy::assert_is_empty)] // tests: plain `is_empty()` asserts read clearer than typed empty comparisons
 
 mod common;
 

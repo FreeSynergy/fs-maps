@@ -1,4 +1,4 @@
-//! Region download: estimate, limits, roundtrip through a local PMTiles file, cancel, clamping.
+//! Region download: estimate, limits, roundtrip through a local `PMTiles` file, cancel, clamping.
 
 use std::sync::Arc;
 

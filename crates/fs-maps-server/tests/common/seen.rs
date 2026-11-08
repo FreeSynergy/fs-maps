@@ -1,4 +1,5 @@
 //! A consumer's listener that writes down everything it is told.
+#![allow(clippy::unused_async_trait_impl)] // the trait dictates `async fn`
 
 use std::cell::RefCell;
 use std::rc::Rc;

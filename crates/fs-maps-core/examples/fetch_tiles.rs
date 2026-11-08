@@ -1,6 +1,6 @@
 //! Fetch a few tiles of a small area, cache them, show cache stats.
 //!
-//! Without arguments: generates a PMTiles fixture and serves it on 127.0.0.1 (no public server is
+//! Without arguments: generates a `PMTiles` fixture and serves it on 127.0.0.1 (no public server is
 //! contacted). With a URL: `cargo run --example fetch_tiles -- https://your.host/map.pmtiles` --
 //! only use a server whose operator allows it; this example issues about a dozen requests.
 
@@ -18,15 +18,14 @@ const UA: &str = "FreeSynergy-Maps-example/0.1 (+https://github.com/FreeSynergy;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tmp = std::env::temp_dir().join(format!("fs-maps-example-{}", std::process::id()));
     std::fs::create_dir_all(&tmp)?;
-    let (url, _server) = match std::env::args().nth(1) {
-        Some(u) => (u, None),
-        None => {
-            let f = tmp.join("fixture.pmtiles");
-            write_fixture(&f, 8).await?;
-            let s = RangeServer::start(&f).await?;
-            println!("serving fixture on {}", s.url);
-            (s.url.clone(), Some(s))
-        }
+    let (url, _server) = if let Some(u) = std::env::args().nth(1) {
+        (u, None)
+    } else {
+        let f = tmp.join("fixture.pmtiles");
+        write_fixture(&f, 8).await?;
+        let s = RangeServer::start(&f).await?;
+        println!("serving fixture on {}", s.url);
+        (s.url.clone(), Some(s))
     };
 
     let source = PmtilesHttpSource::open(&url, UA).await?;
@@ -77,8 +76,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await?;
     println!(
-        "package {:?}: {} tiles, {} bytes on disk",
-        rep.path, rep.tiles_written, rep.file_bytes
+        "package {}: {} tiles, {} bytes on disk",
+        rep.path.display(),
+        rep.tiles_written,
+        rep.file_bytes
     );
     std::fs::remove_dir_all(&tmp)?;
     Ok(())

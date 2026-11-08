@@ -2,6 +2,7 @@
 //!
 //! Pattern: Integration test — the server runs on its own thread and socket, the adapter is the one
 //! the window uses.
+#![allow(clippy::assert_is_empty)] // tests: plain `is_empty()` asserts read clearer than typed empty comparisons
 
 use std::path::Path;
 use std::sync::Arc;

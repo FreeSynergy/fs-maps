@@ -1,5 +1,6 @@
 //! `within` (bounding box, antimeridian, non-point geometries) and `findByName`, answered by
 //! the store.
+#![allow(clippy::assert_is_empty)] // tests: plain `is_empty()` asserts read clearer than typed empty comparisons
 
 mod common;
 

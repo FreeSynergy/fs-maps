@@ -1,4 +1,5 @@
 //! Failures, as a consumer sees them: typed, with the exact type, and the connection lives on.
+#![allow(clippy::assert_is_empty)] // tests: plain `is_empty()` asserts read clearer than typed empty comparisons
 
 mod common;
 
