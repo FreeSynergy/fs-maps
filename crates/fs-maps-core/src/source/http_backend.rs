@@ -59,7 +59,16 @@ pub(super) struct HttpBackend {
 
 impl AsyncBackend for HttpBackend {
     async fn read(&self, offset: u64, length: usize) -> PmtResult<BackendResponse> {
-        let end = offset + length as u64 - 1;
+        // A tile of no bytes asks for nothing; `offset + 0 - 1` would also wrap at offset 0.
+        if length == 0 {
+            return Ok(BackendResponse {
+                bytes: bytes::Bytes::new(),
+                data_version_string: None,
+            });
+        }
+        let end = offset
+            .checked_add(length as u64 - 1)
+            .ok_or_else(|| PmtError::Reading(std::io::ErrorKind::InvalidInput.into()))?;
         let range = HeaderValue::try_from(format!("bytes={offset}-{end}"))?;
         let mut request = Request::new(Method::GET, self.url.clone());
         request.headers_mut().insert(RANGE, range);
@@ -97,6 +106,16 @@ impl AsyncBackend for HttpBackend {
 mod tests {
     use super::*;
     use crate::testutil::{RangeServer, write_fixture};
+
+    #[tokio::test]
+    async fn a_read_of_nothing_or_past_the_end_of_numbers_does_not_panic() {
+        let backend = HttpBackend {
+            client: http_client("FreeSynergy-Maps-test/0.2").unwrap(),
+            url: Url::parse("http://127.0.0.1:9/never-asked").unwrap(),
+        };
+        assert!(backend.read(0, 0).await.unwrap().bytes.is_empty());
+        assert!(backend.read(u64::MAX, 2).await.is_err());
+    }
 
     #[tokio::test]
     async fn a_body_longer_than_asked_is_not_kept() {
