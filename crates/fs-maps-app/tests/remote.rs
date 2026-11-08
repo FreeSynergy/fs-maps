@@ -10,7 +10,7 @@ use std::sync::Arc;
 use fs_components_workbenches::ErrorKind;
 use fs_components_workbenches::people::{PeopleSource, PersonDraft};
 use fs_interfaces::rpc::{bind_socket, serve};
-use fs_maps_app::{PlacesAdapter, PlacesRemote};
+use fs_maps_app::{PlacesAdapter, PlacesApi, PlacesRemote};
 use fs_maps_core::StorePlaces;
 use fs_maps_server::MapsServer;
 use fs_objects::{Store, TursoStore};
@@ -134,4 +134,48 @@ fn nothing_on_the_socket_is_said_plainly() {
         .err()
         .unwrap();
     assert!(message.contains("fs-maps serve"), "{message}");
+}
+
+#[test]
+fn a_stale_save_is_a_conflict_and_what_the_form_never_showed_is_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("maps.sock");
+    start_server(&socket);
+    let remote = Arc::new(PlacesRemote::connect(&socket).unwrap());
+    let adapter = PlacesAdapter::new(remote.clone());
+    let made = remote
+        .create(
+            r#"{"type":"Feature","bbox":[13,52,14,53],"geometry":{"type":"Point","coordinates":[13.4,52.5,34.0]},
+               "properties":{"name":"Spot","description":{"en":"a spot","de":"ein Ort"}}}"#,
+        )
+        .unwrap();
+
+    // Two windows open the same place; the second saves first.
+    let mut first = adapter.draft(&made.id).unwrap();
+    let mut second = adapter.draft(&made.id).unwrap();
+    set(&mut second, "name", "Spot B");
+    adapter.save(&made.id, &second).unwrap();
+    set(&mut first, "name", "Spot A");
+    let refused = adapter.save(&made.id, &first).unwrap_err();
+    assert_eq!(refused.kind, ErrorKind::Conflict, "{refused:?}");
+
+    // A rename leaves a description that is no plain text, the altitude and the box alone.
+    let kept: serde_json::Value =
+        serde_json::from_str(&remote.get(&made.id).unwrap().unwrap().geojson).unwrap();
+    assert_eq!(kept["properties"]["name"], "Spot B");
+    assert_eq!(kept["properties"]["description"]["de"], "ein Ort");
+    assert_eq!(kept["geometry"]["coordinates"][2], 34.0);
+    assert!(kept.get("bbox").is_some(), "{kept}");
+
+    // Moving the point drops the box (it would not contain it any more), the altitude stays.
+    let mut third = adapter.draft(&made.id).unwrap();
+    set(&mut third, "latitude", "10");
+    adapter.save(&made.id, &third).unwrap();
+    let moved: serde_json::Value =
+        serde_json::from_str(&remote.get(&made.id).unwrap().unwrap().geojson).unwrap();
+    assert_eq!(
+        moved["geometry"]["coordinates"],
+        serde_json::json!([13.4, 10.0, 34.0])
+    );
+    assert!(moved.get("bbox").is_none(), "{moved}");
 }

@@ -127,13 +127,18 @@ fn form(name: &str, point: Option<(String, String)>, description: &str) -> Perso
     PersonDraft::new(None, groups)
 }
 
-/// Put the name and description of `draft` into the feature, and the coordinates of a point.
+/// Put what the person changed into the feature: the name, the description, a point's coordinates.
+/// A field left as it was leaves what the feature holds alone (a description that is not a plain
+/// text, the altitude, members of the geometry); a moved point drops the feature's `bbox`, which would
+/// no longer contain it.
 fn apply(feature: &mut Value, draft: &PersonDraft, is_point: bool) -> Result<(), SourceError> {
+    let changed = |key: &str| draft.fields().any(|f| f.key == key && f.changed());
     let name = value_of(draft, NAME);
     if name.is_empty() {
         return Err(SourceError::failed(field::NO_NAME));
     }
-    let coordinates = if is_point {
+    let moved = is_point && (changed(LAT) || changed(LON));
+    let coordinates = if moved {
         Some((
             number(draft, LAT, -90.0, 90.0, field::BAD_LATITUDE)?,
             number(draft, LON, -180.0, 180.0, field::BAD_LONGITUDE)?,
@@ -149,29 +154,45 @@ fn apply(feature: &mut Value, draft: &PersonDraft, is_point: bool) -> Result<(),
         .or_insert_with(|| json!({}))
         .as_object_mut()
         .ok_or_else(|| SourceError::failed("the properties of the place are not an object"))?;
-    properties.insert("name".into(), json!(name));
-    let described = value_of(draft, DESCRIPTION);
-    if described.is_empty() {
-        properties.remove("description");
-    } else {
-        properties.insert("description".into(), json!(described));
+    if changed(NAME) || !properties.contains_key("name") {
+        properties.insert("name".into(), json!(name));
+    }
+    if changed(DESCRIPTION) {
+        let described = value_of(draft, DESCRIPTION);
+        if described.is_empty() {
+            properties.remove("description");
+        } else {
+            properties.insert("description".into(), json!(described));
+        }
     }
     if let Some((lat, lon)) = coordinates {
-        // The altitude of the point, if it has one, stays.
-        let altitude = root
-            .get("geometry")
-            .and_then(|g| g.get("coordinates"))
+        // The altitude of the point, if it has one, stays; so do the other members of the geometry.
+        let geometry = root
+            .entry("geometry")
+            .or_insert_with(|| json!({"type": "Point", "coordinates": []}));
+        let altitude = geometry
+            .get("coordinates")
             .and_then(Value::as_array)
             .and_then(|c| c.get(2))
             .cloned();
         let mut c = vec![json!(lon), json!(lat)];
         c.extend(altitude);
-        root.insert(
-            "geometry".into(),
-            json!({"type": "Point", "coordinates": c}),
-        );
+        if let Some(g) = geometry.as_object_mut() {
+            g.insert("type".into(), json!("Point"));
+            g.insert("coordinates".into(), Value::Array(c));
+        }
+        root.remove("bbox");
     }
     Ok(())
+}
+
+/// What the draft was made from: a conflict is a place that is not the same text now.
+fn revision_of(place: &Place) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    place.name.hash(&mut hash);
+    place.geojson.hash(&mut hash);
+    format!("{:x}", hash.finish())
 }
 
 impl PeopleSource for PlacesAdapter {
@@ -245,7 +266,9 @@ impl PeopleSource for PlacesAdapter {
             .ok_or_else(|| SourceError::not_found("This place no longer exists."))?;
         let feature = feature_of(&place)?;
         let at = point(&feature).map(|(lat, lon)| (text(lat), text(lon)));
-        Ok(form(&place.name, at, &description(&feature)))
+        let mut draft = form(&place.name, at, &description(&feature));
+        draft.revision = Some(revision_of(&place));
+        Ok(draft)
     }
 
     fn blank(&self) -> Result<PersonDraft, SourceError> {
@@ -258,6 +281,11 @@ impl PeopleSource for PlacesAdapter {
             .get(key)
             .map_err(reason)?
             .ok_or_else(|| SourceError::not_found("This place no longer exists."))?;
+        if draft.revision.as_deref() != Some(revision_of(&place).as_str()) {
+            return Err(SourceError::conflict(
+                "Someone else changed this place since you started.",
+            ));
+        }
         let mut feature = feature_of(&place)?;
         let is_point = point(&feature).is_some();
         apply(&mut feature, draft, is_point)?;

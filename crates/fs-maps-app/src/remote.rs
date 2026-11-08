@@ -139,6 +139,15 @@ fn worker(
             }
         };
         let client = Rc::new(connection.client.clone());
+        // One round trip, so a server that accepted the connection and then failed to start is found
+        // here and not at the first call.
+        if let Err(e) = client.support_report_request().send().promise.await {
+            let _ = ready.send(Err(format!(
+                "the maps server on {} does not answer: {e}",
+                socket.display()
+            )));
+            return;
+        }
         let _ = ready.send(Ok(()));
         while let Some(job) = inbox.recv().await {
             tokio::task::spawn_local(job(Rc::clone(&client)));
