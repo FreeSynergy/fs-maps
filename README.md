@@ -8,7 +8,7 @@ What is different here: there is no default map server and nothing is copied. Yo
 
 ## What it can do today
 
-Latest tag: `v0.2.0`.
+Latest tag: `v0.0.1`.
 
 - Read map tiles from a remote PMTiles file (small range requests) or a local one.
 - Cache tiles on disk with a hard size limit and a seven-day expiry.
