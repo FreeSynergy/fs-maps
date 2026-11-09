@@ -10,7 +10,8 @@ use bytes::Bytes;
 use flate2::bufread::GzDecoder;
 use pmtiles::Compression;
 
-/// Largest tile a source hands out; the same as `MAX_PAGE_BYTES` of the rpc side, checked in its test.
+/// Largest tile a source hands out. At most `MAX_PAGE_BYTES` of the rpc side, checked in its test, and
+/// lower, because answers wait in the connection's write queue (`DESIGN.md`).
 pub const MAX_TILE_BYTES: usize = 8 * 1024 * 1024;
 /// Largest directory, decompressed; it parses to at most six times this. A writer grows its leaves
 /// until the root fits 16 KiB, about 2 500 entries: a planet of some 350 million entries has leaves of

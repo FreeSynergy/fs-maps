@@ -6,6 +6,6 @@ mod crafted;
 mod fixture;
 mod server;
 
-pub use crafted::{archive, big_directory, brotli, directory, gzip};
+pub use crafted::{archive, big_directory, brotli, directory, gzip, leaf_at_zero};
 pub use fixture::{write_fixture, write_labelled};
 pub use server::RangeServer;

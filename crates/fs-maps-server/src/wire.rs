@@ -21,9 +21,11 @@ pub(crate) const CONTRACT_VERSION: &str = "places 0.1 (draft)";
 /// Room for what a place adds to its `GeoJSON` besides its name: ids, times, IRIs, framing.
 const ENVELOPE_ROOM: usize = 4096;
 
-/// What a place weighs in a message.
+/// What a place weighs in a message: what [`write_place`] sends, as the feature may get the name of
+/// the envelope written back. One that no longer reads weighs its envelope: `write_place` refuses it.
 pub(crate) fn weight(place: &StoredObject) -> usize {
-    place.content.to_string().len() + envelope_weight(&place.envelope)
+    let geojson = feature_from_place(place).map_or(0, |feature| feature.to_string().len());
+    geojson + envelope_weight(&place.envelope)
 }
 
 /// Write one place, whose size the caller checked. What [`read_feature`] let in always fits; a stored

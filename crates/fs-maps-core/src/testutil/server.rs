@@ -30,6 +30,7 @@ struct Script {
     etag: String,
     redirect: Option<String>,
     padding: usize,
+    head: Option<Vec<u8>>,
 }
 
 impl Drop for RangeServer {
@@ -46,6 +47,7 @@ impl RangeServer {
             etag: "\"fixture\"".into(),
             redirect: None,
             padding: 0,
+            head: None,
         }));
         let shared = script.clone();
         let listener = TcpListener::bind("127.0.0.1:0").await?;
@@ -85,15 +87,22 @@ impl RangeServer {
                         Some((a.parse::<usize>().ok()?, b.parse::<usize>().ok()?))
                     });
                     let path = req.split_whitespace().nth(1).unwrap_or("").to_owned();
-                    let (data, etag, redirect, padding) = {
+                    let (mut data, etag, redirect, padding, head) = {
                         let s = script.lock().unwrap();
                         (
                             s.data.clone(),
                             s.etag.clone(),
                             s.redirect.clone(),
                             s.padding,
+                            s.head.clone(),
                         )
                     };
+                    // The opening read is 16 KiB: any other range at 0 gets `head`.
+                    if let (Some(head), Some((0, b))) = (head, range)
+                        && b + 1 != 16384
+                    {
+                        data = Arc::new(head);
+                    }
                     let redirect = redirect.filter(|to| !to.ends_with(&path));
                     let resp = match range {
                         _ if redirect.is_some() => format!(
@@ -143,6 +152,11 @@ impl RangeServer {
     /// Answer every request for another path with a redirect to `url`.
     pub fn redirect_to(&self, url: &str) {
         self.script.lock().unwrap().redirect = Some(url.to_owned());
+    }
+
+    /// Answer a range at offset 0, other than the opening read, with `bytes`.
+    pub fn answer_at_zero(&self, bytes: Vec<u8>) {
+        self.script.lock().unwrap().head = Some(bytes);
     }
 
     /// Send `bytes` more than was asked for, with every answer.

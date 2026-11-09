@@ -117,7 +117,9 @@ impl<B: AsyncBackend + Sync + Send> AsyncBackend for Guarded<B> {
         {
             return Err(PmtError::SourceModified);
         }
-        if offset == 0 {
+        // Only the very first read is the header's: a leaf section may begin at 0 too, and a server
+        // need not answer a later range with what it sent the first time.
+        if offset == 0 && self.facts.layout.get().is_none() {
             self.first_read(&response).await?;
         } else if let Some(layout) = self.facts.layout.get()
             && layout.is_leaf(offset)

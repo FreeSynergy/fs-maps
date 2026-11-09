@@ -1,13 +1,14 @@
 //! Peak memory of the real program against archives built to cost it, with many calls at once. This
 //! reads what the process really reached (`VmHWM`).
 
+use std::ffi::OsStr;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use fs_interfaces::places_capnp::places;
 use fs_interfaces::rpc::connect;
-use fs_maps_core::testutil::{archive, big_directory, directory, gzip};
+use fs_maps_core::testutil::{RangeServer, archive, big_directory, directory, gzip, leaf_at_zero};
 
 const NONE: u8 = 1;
 const GZIP: u8 = 2;
@@ -35,15 +36,20 @@ async fn wait_for(socket: &Path) {
 /// Serve `bytes` as the map, ask for its tile `calls` times at once; `(peak MiB, answers that failed)`.
 async fn under_load(bytes: &[u8], calls: usize) -> (usize, usize) {
     let dir = tempfile::tempdir().unwrap();
-    let (socket, data) = (dir.path().join("maps.sock"), dir.path().join("data"));
     let file = dir.path().join("hostile.pmtiles");
     std::fs::write(&file, bytes).unwrap();
+    asking(dir.path(), "FS_MAPS_TILES", file.as_os_str(), calls).await
+}
+
+async fn asking(dir: &Path, source: &str, value: &OsStr, calls: usize) -> (usize, usize) {
+    let (socket, data) = (dir.join("maps.sock"), dir.join("data"));
     let mut child = Command::new(env!("CARGO_BIN_EXE_fs-maps-server"))
         .arg("--socket")
         .arg(&socket)
         .arg("--data")
         .arg(&data)
-        .env("FS_MAPS_TILES", &file)
+        .env(source, value)
+        .env("FS_MAPS_CACHE", dir.join("cache"))
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
@@ -108,5 +114,22 @@ fn a_directory_bomb_costs_a_bound_however_many_ask() {
             assert_eq!(failed, refused);
             assert!(peak < LIMIT_MIB, "peak {peak} MiB");
         }
+    });
+}
+
+#[test]
+fn a_bomb_answered_at_offset_0_costs_a_bound() {
+    run(async {
+        let dir = tempfile::tempdir().unwrap();
+        let bomb = gzip(&vec![0u8; 512 * MIB]);
+        let file = dir.path().join("zero.pmtiles");
+        std::fs::write(&file, leaf_at_zero(bomb.len() as u64)).unwrap();
+        let server = RangeServer::start(&file).await.unwrap();
+        server.answer_at_zero(bomb);
+        let url = OsStr::new(&server.url);
+        let (peak, failed) = asking(dir.path(), "FS_MAPS_TILES_URL", url, 1).await;
+        println!("bomb at offset 0: peak {peak} MiB");
+        assert_eq!(failed, 1);
+        assert!(peak < LIMIT_MIB, "peak {peak} MiB");
     });
 }

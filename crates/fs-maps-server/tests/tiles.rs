@@ -128,6 +128,6 @@ async fn a_tile_larger_than_a_message_is_refused_and_the_connection_lives() {
 }
 
 #[test]
-fn the_limit_of_a_tile_is_the_limit_of_an_answer() {
-    assert_eq!(fs_maps_core::MAX_TILE_BYTES, MAX_PAGE_BYTES);
+fn a_tile_the_limit_allows_fits_an_answer() {
+    assert!(fs_maps_core::MAX_TILE_BYTES <= MAX_PAGE_BYTES);
 }

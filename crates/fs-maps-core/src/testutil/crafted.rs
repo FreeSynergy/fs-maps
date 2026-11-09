@@ -82,3 +82,16 @@ pub fn archive(
     out.extend_from_slice(data);
     out
 }
+
+/// An archive whose header says its leaf section begins at offset 0 and has `leaf_length` bytes, with
+/// a root directory pointing there. Offset 0 then is both the header and a leaf directory.
+pub fn leaf_at_zero(leaf_length: u64) -> Vec<u8> {
+    const GZIP: u8 = 2;
+    const NONE: u8 = 1;
+    const MVT: u8 = 1;
+    let root = gzip(&directory(0, leaf_length));
+    let mut bytes = archive([GZIP, NONE, MVT], &root, &[], b"tile", 4);
+    bytes[40..48].copy_from_slice(&0u64.to_le_bytes());
+    bytes[48..56].copy_from_slice(&leaf_length.to_le_bytes());
+    bytes
+}

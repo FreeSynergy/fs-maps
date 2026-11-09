@@ -108,3 +108,48 @@ async fn a_place_no_message_can_carry_does_not_hide_those_behind_it() {
     })
     .await;
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_name_sent_twice_is_counted_twice() {
+    with_store(|maps, store| async move {
+        let p = maps.places;
+        // No name in the feature: the envelope's is written back, 80 MiB in all, and a message holds 64.
+        let name = format!("B{}", "x".repeat(40 * 1024 * 1024));
+        let feature = json!({"type":"Feature","geometry":null,"properties":{}});
+        let object = StoredObject::new(
+            Envelope::new("Place", name),
+            "application/geo+json",
+            feature,
+        );
+        let id = object.envelope.id;
+        store.put(object, common::ME).await.unwrap();
+        let before = create(&p, "A", 1.0, 1.0).await;
+        let behind = create(&p, "C", 1.0, 1.0).await;
+
+        let first = p.list_request().send().promise.await.unwrap();
+        let (items, next) = page_of(first.get().unwrap().get_page().unwrap());
+        assert_eq!(items, [(before, "A".to_string())]);
+
+        let mut at = p.list_request();
+        at.get().init_cursor().set_opaque(&next);
+        let e = at.send().promise.await.err().unwrap();
+        let refusal = problem(&e);
+        assert_eq!(
+            (refusal.problem_type.as_str(), refusal.status),
+            (TOO_LARGE, 413)
+        );
+        let past = refusal.next.expect("a cursor past it");
+
+        let mut on = p.list_request();
+        on.get().init_cursor().set_opaque(&past);
+        let rest = on.send().promise.await.unwrap();
+        let (items, next) = page_of(rest.get().unwrap().get_page().unwrap());
+        assert_eq!(items, [(behind, "C".to_string())]);
+        assert!(next.is_empty());
+
+        let mut get = p.get_request();
+        write_object_id(get.get().init_id(), id);
+        assert_eq!(refused(get.send().promise.await), is(TOO_LARGE, 413));
+    })
+    .await;
+}
