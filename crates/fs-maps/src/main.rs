@@ -4,6 +4,7 @@
 //! ```text
 //! fs-maps                          the window (feature `gui`, on by default)
 //! fs-maps [--socket F] [--size WxH] [--snapshot F.png]
+//! fs-maps --version                the version
 //! fs-maps serve                    the server (Cap'n Proto, places.capnp)
 //! ```
 
@@ -16,6 +17,10 @@ fn main() -> ExitCode {
     let raw: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
     let text = |i: usize| raw.get(i).and_then(|w| w.to_str());
     match text(0) {
+        Some("--version" | "-V") => {
+            println!("fs-maps {}", env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
+        }
         Some("serve") => serve(&raw[1..]),
         // `fs-maps --socket PATH serve`: the option may stand before the word.
         Some("--socket") if text(2) == Some("serve") => {
