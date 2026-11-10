@@ -82,7 +82,7 @@ fn create_find_within_change_delete_over_the_socket() {
             &v(&[
                 ("name", &["Bern"]),
                 ("position", &["geo:46.948,7.447"]),
-                ("keywords", &["capital", "swiss"]),
+                ("keywords", &["capital, swiss"]),
             ]),
         )
         .unwrap();
@@ -97,7 +97,7 @@ fn create_find_within_change_delete_over_the_socket() {
     assert_eq!(all.len(), 2);
     let bern = all.iter().find(|r| r.id == id).unwrap();
     assert_eq!(bern.values["name"], ["Bern"]);
-    assert_eq!(bern.values["keywords"], ["capital", "swiss"]);
+    assert_eq!(bern.values["keywords"], ["capital, swiss"]);
     assert!(bern.values["position"][0].starts_with("geo:46.948"));
     // find by name
     assert_eq!(backend.list(&v(&[("term", &["wie"])])).unwrap().len(), 1);
@@ -116,7 +116,7 @@ fn create_find_within_change_delete_over_the_socket() {
     let r = backend.list(&v(&[("term", &["bern"])])).unwrap().remove(0);
     assert_eq!(r.values["description"], ["on the Aare"]);
     assert_eq!(r.values["name"], ["Bern"]);
-    assert_eq!(r.values["keywords"], ["capital", "swiss"]);
+    assert_eq!(r.values["keywords"], ["capital, swiss"]);
     // an empty list clears, a new value replaces
     backend
         .run(
@@ -222,4 +222,70 @@ fn nothing_on_the_socket_is_said_plainly() {
 fn tiles_come_over_the_socket_as_not_available_when_no_map_is_configured() {
     let (_dir, remote) = connect();
     assert!(remote.tile(0, 0, 0).is_err());
+}
+
+#[test]
+fn review_findings_boxes_names_uncertainty_keywords_and_altitudes() {
+    let (_dir, remote) = connect();
+    let backend = PlacesBackend::new(remote.clone(), "Place");
+    let id = backend
+        .run(
+            "create",
+            &v(&[
+                ("name", &["Pole"]),
+                ("position", &["geo:90,0"]),
+                ("keywords", &["a,b"]),
+            ]),
+        )
+        .unwrap()
+        .id
+        .unwrap();
+    backend
+        .run(
+            "create",
+            &v(&[("name", &["Fix"]), ("position", &["geo:48.2,16.37;u=40"])]),
+        )
+        .unwrap();
+    // the whole world, written with the edges of the map
+    let world = v(&[
+        ("southwest", &["geo:-90,-180"]),
+        ("northeast", &["geo:90,180"]),
+    ]);
+    assert_eq!(backend.list(&world).unwrap().len(), 2);
+    // south above north is a refusal of the corner, not an unreachable program
+    let upside = v(&[("southwest", &["geo:50,10"]), ("northeast", &["geo:40,20"])]);
+    assert!(matches!(
+        backend.list(&upside),
+        Err(BackendError::Rejected(_))
+    ));
+    // keywords are stored as words and read back as the one typed value
+    assert!(
+        remote
+            .get(&id)
+            .unwrap()
+            .unwrap()
+            .geojson
+            .contains(r#""keywords":["a","b"]"#)
+    );
+    // the uncertainty of the position survives
+    let fix = backend.list(&v(&[("term", &["fix"])])).unwrap().remove(0);
+    assert!(
+        fix.values["position"][0].contains("u=40"),
+        "{:?}",
+        fix.values["position"]
+    );
+    // the required name cannot be cleared; a position with an altitude that is no number is refused
+    assert!(matches!(
+        backend.run("change", &v(&[("id", &[id.as_str()]), ("name", &[])])),
+        Err(BackendError::Rejected(_))
+    ));
+    let huge = format!("geo:1,2,1{}", "0".repeat(400));
+    assert!(matches!(
+        backend.run(
+            "create",
+            &v(&[("name", &["x"]), ("position", &[huge.as_str()])])
+        ),
+        Err(BackendError::Rejected(_))
+    ));
+    assert_eq!(backend.list(&Values::new()).unwrap().len(), 2);
 }

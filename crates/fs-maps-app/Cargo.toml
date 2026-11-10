@@ -10,14 +10,14 @@ rust-version.workspace = true
 fs-maps-core = { path = "../fs-maps-core" }
 fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.8", features = ["rpc"] }
 fs-types = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.2" }
-# One revision of fs-components for all of them (the shell types must be the same crate): the commit 2bb3dfd is
+# One revision of fs-components for all of them (the shell types must be the same crate): the commit 31a6dc0 is
 # 4688cee (fs-admin-frontend as asked) plus the new crate fs-components-map. No tag yet (reported).
-fs-components-app = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
-fs-admin-frontend = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
-fs-components-fields = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
-fs-components-styles = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
-fs-components-widgets = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
-fs-components-map = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
+fs-components-app = { git = "https://github.com/FreeSynergy/fs-components", rev = "31a6dc0d6c5c0ac1a9b4a8a76624e5ff7ce68ca3" }
+fs-admin-frontend = { git = "https://github.com/FreeSynergy/fs-components", rev = "31a6dc0d6c5c0ac1a9b4a8a76624e5ff7ce68ca3" }
+fs-components-fields = { git = "https://github.com/FreeSynergy/fs-components", rev = "31a6dc0d6c5c0ac1a9b4a8a76624e5ff7ce68ca3" }
+fs-components-styles = { git = "https://github.com/FreeSynergy/fs-components", rev = "31a6dc0d6c5c0ac1a9b4a8a76624e5ff7ce68ca3" }
+fs-components-widgets = { git = "https://github.com/FreeSynergy/fs-components", rev = "31a6dc0d6c5c0ac1a9b4a8a76624e5ff7ce68ca3" }
+fs-components-map = { git = "https://github.com/FreeSynergy/fs-components", rev = "31a6dc0d6c5c0ac1a9b4a8a76624e5ff7ce68ca3" }
 capnp = "0.27"
 uuid = "1"
 serde_json = "1"

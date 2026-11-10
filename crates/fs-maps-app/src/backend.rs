@@ -32,16 +32,34 @@ fn error(e: ApiError) -> BackendError {
     }
 }
 
-fn corner(query: &Values, key: &str) -> Result<Option<GeoUri>, BackendError> {
-    match query.get(key).and_then(|v| v.first()) {
-        None => Ok(None),
-        Some(text) => GeoUri::parse(text).map(Some).map_err(|_| {
-            BackendError::Rejected(vec![RecordIssue {
-                field: key.to_owned(),
-                index: 0,
-                problem: RecordProblem::Value(TypeProblem::BadPlace),
-            }])
-        }),
+fn bad(field: &str) -> BackendError {
+    BackendError::Rejected(vec![RecordIssue {
+        field: field.to_owned(),
+        index: 0,
+        problem: RecordProblem::Value(TypeProblem::BadPlace),
+    }])
+}
+
+/// `(latitude, longitude)` of a corner as typed. Not `GeoUri::parse`: that normalises the longitude of a pole and
+/// -180 to 180, right for a point but wrong for the edge of a box.
+fn corner(query: &Values, key: &str) -> Result<Option<(f64, f64)>, BackendError> {
+    let Some(text) = query.get(key).and_then(|v| v.first()) else {
+        return Ok(None);
+    };
+    GeoUri::parse(text).map_err(|_| bad(key))?;
+    let coordinates = text
+        .trim()
+        .get(4..)
+        .unwrap_or_default()
+        .split(';')
+        .next()
+        .unwrap_or_default();
+    let mut parts = coordinates.split(',').map(|p| p.trim().parse::<f64>());
+    match (parts.next(), parts.next()) {
+        (Some(Ok(lat)), Some(Ok(lon))) if lat.abs() <= 90.0 && lon.abs() <= 180.0 => {
+            Ok(Some((lat, lon)))
+        }
+        _ => Err(bad(key)),
     }
 }
 
@@ -138,7 +156,8 @@ impl Backend for PlacesBackend {
             return Ok(Vec::new());
         }
         let places = match (corner(query, "southwest")?, corner(query, "northeast")?) {
-            (Some(sw), Some(ne)) => self.api.within((sw.lon, sw.lat, ne.lon, ne.lat)),
+            (Some(sw), Some(ne)) if sw.0 > ne.0 => return Err(bad("northeast")),
+            (Some(sw), Some(ne)) => self.api.within((sw.1, sw.0, ne.1, ne.0)),
             _ => match query.get("term").and_then(|v| v.first()).map(|t| t.trim()) {
                 Some(term) if !term.is_empty() => self.api.find_by_name(term),
                 _ => self.api.list(),

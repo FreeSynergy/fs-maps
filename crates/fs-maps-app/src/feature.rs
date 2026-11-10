@@ -32,6 +32,7 @@ fn point(feature: &Value) -> Option<GeoUri> {
     let c = geometry.get("coordinates")?.as_array()?;
     let mut uri = GeoUri::new(c.get(1)?.as_f64()?, c.first()?.as_f64()?).ok()?;
     uri.alt = c.get(2).and_then(Value::as_f64);
+    uri.uncertainty = property(feature, "uncertainty").and_then(Value::as_f64);
     Some(uri)
 }
 
@@ -90,7 +91,8 @@ pub(crate) fn values_of(place: &Place) -> Result<(Value, Values), String> {
             .filter_map(|w| w.as_str().map(str::to_owned))
             .collect();
         if !words.is_empty() {
-            values.insert("keywords".into(), words);
+            // the basic type `keywords` is one comma separated value (fs-types)
+            values.insert("keywords".into(), vec![words.join(", ")]);
         }
     }
     if let Some(l) = text("url").filter(|l| !l.is_empty()) {
@@ -101,18 +103,18 @@ pub(crate) fn values_of(place: &Place) -> Result<(Value, Values), String> {
 
 /// A feature for a new place.
 pub(crate) fn new_feature(input: &Values) -> Result<Value, Vec<RecordIssue>> {
+    if input.get("name").is_none() {
+        return Err(vec![issue("name", TypeProblem::Empty)]);
+    }
     let mut feature = json!({"type": "Feature", "geometry": null, "properties": {}});
     apply(&mut feature, input)?;
     Ok(feature)
 }
 
-fn first<'a>(input: &'a Values, key: &str) -> Option<&'a str> {
-    input.get(key).and_then(|v| v.first()).map(String::as_str)
-}
-
 /// Put the input into the feature: only the fields that are in `input`, and so partial (see the module).
 pub(crate) fn apply(feature: &mut Value, input: &Values) -> Result<(), Vec<RecordIssue>> {
     let was_point = point(feature).is_some() || feature.get("geometry").is_none_or(Value::is_null);
+    let mut uncertainty = None;
     let geometry = match input.get("position").map(Vec::as_slice) {
         None => None,
         Some([]) => Some(Value::Null),
@@ -122,8 +124,14 @@ pub(crate) fn apply(feature: &mut Value, input: &Values) -> Result<(), Vec<Recor
             }
             let p =
                 GeoUri::parse(uri).map_err(|_| vec![issue("position", TypeProblem::BadPlace)])?;
+            if p.alt.is_some_and(|a| !a.is_finite())
+                || p.uncertainty.is_some_and(|u| !u.is_finite())
+            {
+                return Err(vec![issue("position", TypeProblem::PlaceRange)]);
+            }
             let mut c = vec![json!(p.lon), json!(p.lat)];
             c.extend(p.alt.map(|a| json!(a)));
+            uncertainty = Some(p.uncertainty);
             Some(json!({"type": "Point", "coordinates": c}))
         }
     };
@@ -143,24 +151,48 @@ pub(crate) fn apply(feature: &mut Value, input: &Values) -> Result<(), Vec<Recor
     let Some(properties) = properties.as_object_mut() else {
         return Ok(());
     };
-    let mut set = |key: &str, field: &str, list: bool| {
+    // GeoJSON has no uncertainty: it travels as a property next to the point (`u=` of RFC 5870).
+    match uncertainty {
+        Some(Some(u)) => {
+            properties.insert("uncertainty".into(), json!(u));
+        }
+        Some(None) => {
+            properties.remove("uncertainty");
+        }
+        None => {}
+    }
+    let mut set = |key: &str, field: &str| {
         let Some(values) = input.get(field) else {
             return;
         };
         let values: Vec<&String> = values.iter().filter(|v| !v.trim().is_empty()).collect();
         if values.is_empty() {
             properties.remove(key);
-        } else if list {
-            properties.insert(key.into(), json!(values));
         } else {
             properties.insert(key.into(), json!(values[0]));
         }
     };
-    set("name", "name", false);
-    set("description", "description", false);
-    set("keywords", "keywords", true);
-    set("url", "link", false);
-    if first(input, "name").is_some_and(|n| n.trim().is_empty()) {
+    set("name", "name");
+    set("description", "description");
+    set("url", "link");
+    if let Some(typed) = input.get("keywords") {
+        let words: Vec<&str> = typed
+            .iter()
+            .flat_map(|t| t.split(','))
+            .map(str::trim)
+            .filter(|w| !w.is_empty())
+            .collect();
+        if words.is_empty() {
+            properties.remove("keywords");
+        } else {
+            properties.insert("keywords".into(), json!(words));
+        }
+    }
+    // the name is required: an empty list or a blank value would clear it
+    if input
+        .get("name")
+        .is_some_and(|n| n.iter().all(|v| v.trim().is_empty()))
+    {
         return Err(vec![issue("name", TypeProblem::Empty)]);
     }
     Ok(())

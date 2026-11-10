@@ -20,6 +20,9 @@ use fs_types::TypeDescription;
 pub use crate::api::{ApiError, Place, PlacesApi};
 use crate::wire::{collect, page_of, parse_id, problem, read_place};
 
+/// The longest the window waits for the server; a server that never answers must not freeze it for good.
+const ANSWER_WITHIN: std::time::Duration = std::time::Duration::from_secs(60);
+
 type Job = Box<dyn FnOnce(Rc<places::Client>) -> Pin<Box<dyn Future<Output = ()>>> + Send>;
 
 /// The maps server on a socket.
@@ -57,12 +60,12 @@ impl PlacesRemote {
             })
         });
         self.jobs.send(job).map_err(|_| gone())?;
-        answer.recv().map_err(|_| gone())?
+        answer.recv_timeout(ANSWER_WITHIN).map_err(|_| gone())?
     }
 }
 
 fn gone() -> ApiError {
-    ApiError::Failed("the maps server went away".into())
+    ApiError::Failed("the maps server went away or did not answer in time".into())
 }
 
 fn worker(
