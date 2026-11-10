@@ -11,14 +11,17 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::must_use_candidate, clippy::module_name_repetitions)]
 
+mod api;
 mod backend;
 mod feature;
 pub mod gui;
 pub mod map;
 mod remote;
 pub mod window;
+mod wire;
 mod words;
 
+pub use api::{ApiError, Place, PlacesApi};
 pub use backend::{Listener, PlacesBackend};
-pub use remote::{ApiError, Place, PlacesApi, PlacesRemote};
+pub use remote::PlacesRemote;
 pub use words::{English, TITLE};

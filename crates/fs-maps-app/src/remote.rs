@@ -11,83 +11,14 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::thread;
 
-use fs_interfaces::places_capnp::{place, place_page, places, tile_source};
-use fs_interfaces::rpc::{Problem, connect, read_envelope, write_uuid};
+use fs_interfaces::places_capnp::{places, tile_source};
+use fs_interfaces::rpc::{connect, write_uuid};
 use fs_interfaces::types_capnp::type_catalog;
 use fs_maps_core::describe::read_catalog;
 use fs_types::TypeDescription;
-use uuid::Uuid;
 
-/// A place: its id, its name and its `GeoJSON` feature as the server keeps it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Place {
-    /// The id.
-    pub id: String,
-    /// The name.
-    pub name: String,
-    /// The `GeoJSON` `Feature`.
-    pub geojson: String,
-}
-
-/// Why a call failed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ApiError {
-    /// There is no such place.
-    NotFound(String),
-    /// The server cannot do this (the provider rule).
-    Unsupported(String),
-    /// The server refused or failed; the text is its own.
-    Failed(String),
-}
-
-/// What the window asks of the maps program.
-pub trait PlacesApi: Send + Sync {
-    /// All places, in the server's order.
-    ///
-    /// # Errors
-    /// [`ApiError`].
-    fn list(&self) -> Result<Vec<Place>, ApiError>;
-    /// One place, `None` if there is none.
-    ///
-    /// # Errors
-    /// [`ApiError`].
-    fn get(&self, id: &str) -> Result<Option<Place>, ApiError>;
-    /// A new place from a `GeoJSON` feature.
-    ///
-    /// # Errors
-    /// [`ApiError`].
-    fn create(&self, geojson: &str) -> Result<Place, ApiError>;
-    /// Replace a place with a `GeoJSON` feature.
-    ///
-    /// # Errors
-    /// [`ApiError`].
-    fn update(&self, id: &str, geojson: &str) -> Result<Place, ApiError>;
-    /// Delete a place.
-    ///
-    /// # Errors
-    /// [`ApiError`].
-    fn delete(&self, id: &str) -> Result<(), ApiError>;
-    /// Places whose name contains `term`, in the server's order.
-    ///
-    /// # Errors
-    /// [`ApiError`].
-    fn find_by_name(&self, term: &str) -> Result<Vec<Place>, ApiError>;
-    /// Places whose bounding box meets the box `(west, south, east, north)` (`west > east` crosses 180).
-    ///
-    /// # Errors
-    /// [`ApiError`].
-    fn within(&self, area: (f64, f64, f64, f64)) -> Result<Vec<Place>, ApiError>;
-    /// The data types the program describes (`Places.types`).
-    ///
-    /// # Errors
-    /// [`ApiError`].
-    fn types(&self) -> Result<Vec<TypeDescription>, ApiError>;
-    /// One vector tile (uncompressed MVT); `None` = there is none.
-    ///
-    /// # Errors
-    /// [`ApiError`].
-    fn tile(&self, z: u8, x: u32, y: u32) -> Result<Option<Vec<u8>>, ApiError>;
-}
+pub use crate::api::{ApiError, Place, PlacesApi};
+use crate::wire::{collect, page_of, parse_id, problem, read_place};
 
 type Job = Box<dyn FnOnce(Rc<places::Client>) -> Pin<Box<dyn Future<Output = ()>>> + Send>;
 
@@ -128,32 +59,6 @@ impl PlacesRemote {
         self.jobs.send(job).map_err(|_| gone())?;
         answer.recv().map_err(|_| gone())?
     }
-}
-
-/// All pages of a paged answer: `page` asks for the page at a cursor.
-async fn collect<F, Fut>(mut page: F) -> capnp::Result<Vec<Place>>
-where
-    F: FnMut(&[u8]) -> Fut,
-    Fut: Future<Output = capnp::Result<(Vec<Place>, Vec<u8>)>>,
-{
-    let (mut found, mut cursor) = (Vec::new(), Vec::<u8>::new());
-    loop {
-        let (items, next) = page(&cursor).await?;
-        found.extend(items);
-        if next.is_empty() {
-            return Ok(found);
-        }
-        cursor = next;
-    }
-}
-
-fn page_of(page: place_page::Reader<'_>) -> capnp::Result<(Vec<Place>, Vec<u8>)> {
-    let items = page
-        .get_items()?
-        .iter()
-        .map(read_place)
-        .collect::<capnp::Result<_>>()?;
-    Ok((items, page.get_next()?.get_opaque()?.to_vec()))
 }
 
 fn gone() -> ApiError {
@@ -201,29 +106,6 @@ fn worker(
             tokio::task::spawn_local(job(Rc::clone(&client)));
         }
     });
-}
-
-fn problem(error: &capnp::Error) -> ApiError {
-    match Problem::from_error(error) {
-        Some(p) if p.is_unsupported() => ApiError::Unsupported(p.detail),
-        Some(p) if p.status == 404 => ApiError::NotFound(p.detail),
-        Some(p) => ApiError::Failed(p.detail),
-        None => ApiError::Failed(error.to_string()),
-    }
-}
-
-fn parse_id(id: &str) -> Result<Uuid, ApiError> {
-    id.parse()
-        .map_err(|_| ApiError::NotFound(format!("\"{id}\" names no place.")))
-}
-
-fn read_place(p: place::Reader<'_>) -> capnp::Result<Place> {
-    let envelope = read_envelope(p.get_envelope()?)?;
-    Ok(Place {
-        id: envelope.id.to_string(),
-        name: envelope.name,
-        geojson: p.get_geojson()?.to_string()?,
-    })
 }
 
 impl PlacesApi for PlacesRemote {
