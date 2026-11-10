@@ -1728,7 +1728,7 @@ dependencies = [
 
 [[package]]
 name = "fs-maps"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "async-trait",
  "capnp",
@@ -1743,7 +1743,7 @@ dependencies = [
 
 [[package]]
 name = "fs-maps-app"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "capnp",
  "fs-admin-frontend",
@@ -1765,7 +1765,7 @@ dependencies = [
 
 [[package]]
 name = "fs-maps-core"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "async-trait",
  "brotli 8.0.4",
@@ -1787,7 +1787,7 @@ dependencies = [
 
 [[package]]
 name = "fs-maps-server"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "async-trait",
  "capnp",

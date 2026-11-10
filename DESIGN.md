@@ -7,7 +7,7 @@ Evidence for all policy decisions: `RESEARCH.md` (2026-11-05). Decisions: ADR 00
 
 ## State
 
-Version 0.3.0: `fs-maps-server`, the contract `places.capnp` over a Unix socket; `StorePlaces`, the owning provider with the live feed; `fs-interfaces` v0.45.0. Before, in 0.1: `Places` is the provider of `places.capnp` (ADR 0045, 0050): trait with every method, `Unsupported` defaults, `Capabilities`; `TileSource` also reports `Capabilities`. Earlier: ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests before the provider work, all unchanged; 46 now).
+Version 0.0.4 (window on the shell, the component Karte and the generated Admin frontend; type descriptions). Before, 0.3.0: `fs-maps-server`, the contract `places.capnp` over a Unix socket; `StorePlaces`, the owning provider with the live feed; `fs-interfaces` v0.45.0. Before, in 0.1: `Places` is the provider of `places.capnp` (ADR 0045, 0050): trait with every method, `Unsupported` defaults, `Capabilities`; `TileSource` also reports `Capabilities`. Earlier: ADR 0043 refactor done: no file over 300 lines (only `geouri.rs` is 212, parser plus its tests), `#![deny(missing_docs)]`, `clippy::pedantic` (a few noisy lints allowed in `lib.rs` with reasons), behaviour unchanged (30 tests before the provider work, all unchanged; 46 now).
 
 | Area | State |
 |---|---|
@@ -33,7 +33,8 @@ Version 0.3.0: `fs-maps-server`, the contract `places.capnp` over a Unix socket;
 | Server `fs-maps-server`: every method of `Places` and `TileSource`, `subscribe` (with `ended`), `supportReport` on both; errors as typed problems (`places/not-found` 404, `places/conflict` 409, `places/invalid` 422, `places/usage-policy` 403, `places/tile-source-failed` 502, `places/store-failed` 500, `places/stored-data-invalid` 500, the shared `invalid-request` 422 and `too-large` 413, `Unsupported` 501); a read that fails ends the feed with `ended`; binary with the shared `--socket`, `--data`, `--actor`, `--instance` (data directory 0700), tiles from the environment: `FS_MAPS_TILES` (path list), `FS_MAPS_TILES_URL`, `FS_MAPS_USER_AGENT`, `FS_MAPS_CACHE` (0700, default below `$XDG_CACHE_HOME/freesynergy/maps`, one per data directory), `FS_MAPS_CACHE_MIB` | done, draft; open points below |
 | `geouri`: RFC 5870 `geo:` parse/format (crs=wgs84, `u=`, extra params, pole/antimeridian normalisation) | done |
 | Examples `fetch_tiles` (loopback fixture by default), `places` | done |
-| GUI, MVT decoding/rendering, styles, geocoding/search, routing | **not started** (see RESEARCH.md section 5) |
+| Window: map (component Karte, vector tiles from the server) + generated Admin frontend per data type | done, v0.0.4 |
+| Styles beyond the Admin look, geocoding/search, routing | **not started** (see RESEARCH.md section 5) |
 
 ## Structure and pattern map (ADR 0043)
 
@@ -152,9 +153,18 @@ file mtime so the order survives restarts). One process owns a cache dir (no cro
 
 ## One binary `fs-maps` and its window (ADR 0063, 2026-11-08)
 
-`crates/fs-maps` is the only binary: `fs-maps` without arguments opens the window, `fs-maps serve` runs the server (`fs_maps_server::serve`; tiles from `FS_MAPS_TILES` / `FS_MAPS_TILES_URL`), feature `gui` (default) builds the window. `fs-maps-server` and `fs-maps-app` are libraries. The window (`crates/fs-maps-app`) is a frontend over `places.capnp`: `PlacesApi` (trait first) with `PlacesRemote` (a worker thread owns the Cap'n Proto connection) and `PlacesAdapter`, which gives the places to the list-and-page workbench of `fs-components` (built for people, neutral in what it shows) as rows (name, position), a sheet (position, geo URI, description) and a form (name, latitude, longitude, description). A place that is not a single point is renamed and described, its shape is kept as it is. If no server answers on the user's own socket the window starts `fs-maps serve` detached. Tests: `crates/fs-maps-app/tests/remote.rs` (real server, real store), `crates/fs-maps/tests/binary*.rs`, `memory.rs`, `refusals.rs` (the real binary).
+`crates/fs-maps` is the only binary: `fs-maps` without arguments opens the window, `fs-maps serve` runs the server (`fs_maps_server::serve`; tiles from `FS_MAPS_TILES` / `FS_MAPS_TILES_URL`), feature `gui` (default) builds the window. `fs-maps-server` and `fs-maps-app` are libraries. The window (`crates/fs-maps-app`) is data and wiring only (ADR 0066: no render code in the program). It is the shell of ADR 0065 (`fs-components-app`) around the component *Karte* (`fs-components-map`, own crate in `fs-components`) and the generated Admin frontend (`fs-admin-frontend`) over the type descriptions the server reports (`Places.types`). Tests: `crates/fs-maps-app/tests/{remote,window}.rs` (real server, real store), `crates/fs-maps/tests/binary*.rs`, `memory.rs`, `refusals.rs`, `lease.rs` (the real binary); `crates/fs-maps-core/tests/describe.rs`, `crates/fs-maps-server/tests/types.rs`.
 
-**There is no map yet:** no tile view, no pan or zoom, no place search by area (`within`), no tile download of a region; tiles are served by the server (`tiles.capnp`) and nobody draws them. That view needs its own widget in `fs-components` (raster or vector tiles, pointer and wheel events) and is the next piece. A bad latitude or longitude is refused with a sentence on Save, not while typing.
+| App module | Pattern | Why |
+|---|---|---|
+| `remote.rs` | Proxy | worker thread owns the Cap'n Proto connection; trait `PlacesApi` first |
+| `backend.rs` | Repository (trait `Backend` of the frontend) + Observer | records and commands of one data type; the support table decides; listeners after a write |
+| `feature.rs` | Adapter (pure) | GeoJSON feature <-> typed values; partial change (missing = unchanged, empty list = cleared) |
+| `map.rs` | Adapter | places as markers and server tiles as bytes for the component Karte |
+| `window.rs`, `gui.rs` | Facade | shell + map + one screen per type; arguments, server start |
+| `words.rs` | Strategy (`Say`) | English for the keys |
+
+Description of the data types (`fs-maps-core/src/describe/`, pattern Registry over `DescribesType`): `Place` (GeoJSON Feature RFC 7946 as AS2 Place, position as `geo:` URI RFC 5870: the format map tools read, and the one text form of a point), `MapLayer` (GeoJSON FeatureCollection, WFS, WMTS), `MapTour` (AS2 OrderedCollection of Place: AS2 carries an order), `Region` (PMTiles v3 package). `fs-types` is v0.0.2 (the version of `fs-admin-frontend`); the contract is `fs-interfaces` v0.0.8, a second copy of that crate in the build, so the descriptions cross as plain values (`describe/wire.rs`). Switching to the newer `fs-types` (field `supported`) needs the frontend on it too.
 
 ## Unsupported
 
@@ -168,3 +178,11 @@ Commands the type descriptions (`crates/fs-maps-core/src/describe/`) list but th
 * `MapLayer.webhook`: map events and webhooks for embedding (Felt).
 * `MapTour.find`, `MapTour.create`, `MapTour.change`, `MapTour.delete`: maps with a guided tour or story (ordered stops); the core has no tours.
 * `Region.find`, `Region.estimate`, `Region.download`, `Region.delete`: the core has `RegionDownload` (estimate, download, PMTiles package), but `places.capnp` has no call for it.
+
+Other open points of the window (named, not faked):
+
+* The frontend (`fs-admin-frontend` @ 4688cee) does not know `supported`: a command the table lists above is shown like any other and answers `unsupported:<name>` (a `BackendError::Unavailable`, which the frontend treats as "program unreachable" and marks the records old). To be reported to Thread A/T; the lock "kommt noch" needs the flag in the description.
+* The map screen cannot be added to `admin_window`; `window.rs` builds the shell the same way.
+* Markers are read again after a write through this window; a change by another client is not seen until restart (the contract has `subscribe`; not used by the window yet).
+* The map has buttons and keys for pan and zoom, no drag or wheel (the component says so). A place that is a line or area has its marker at the middle of its box and no `position` value; its shape is kept on change, a position cannot replace it.
+* No tiles when the server has no map configured (`FS_MAPS_TILES`); the markers show on the empty map.
