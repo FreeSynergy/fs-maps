@@ -16,7 +16,11 @@ pub struct Support {
 }
 
 const fn row(data_type: &'static str, command: &'static str, supported: bool) -> Support {
-    Support { data_type, command, supported }
+    Support {
+        data_type,
+        command,
+        supported,
+    }
 }
 
 /// Every command of every type. A test keeps this table and the descriptions in step, and `DESIGN.md` listing

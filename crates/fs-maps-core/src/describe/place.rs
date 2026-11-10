@@ -5,9 +5,7 @@
 //! the basic type `place` of ADR 0066. GeoJSON is the format all map tools read and write; RFC 5870 is the one
 //! standard text form of a point (with altitude and uncertainty).
 
-use fs_types::{
-    BasicType, CommandKind, DescribesType, FieldDescription, TypeDescription,
-};
+use fs_types::{BasicType, CommandKind, DescribesType, FieldDescription, TypeDescription};
 
 use super::{command, field, find, record};
 
@@ -26,9 +24,16 @@ fn values() -> Vec<FieldDescription> {
     ]
 }
 
-fn with_values(mut c: fs_types::CommandDescription, name_required: bool) -> fs_types::CommandDescription {
+fn with_values(
+    mut c: fs_types::CommandDescription,
+    name_required: bool,
+) -> fs_types::CommandDescription {
     for f in values() {
-        c = c.input(if f.name == "name" && name_required { f.required() } else { f });
+        c = c.input(if f.name == "name" && name_required {
+            f.required()
+        } else {
+            f
+        });
     }
     c
 }

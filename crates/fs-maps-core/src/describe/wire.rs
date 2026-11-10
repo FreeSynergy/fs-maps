@@ -5,15 +5,16 @@
 //! (the schema promise: only append), a kind this side does not know reads as `unknown`.
 
 use fs_interfaces::types_capnp as wire;
-use fs_types::{
-    BasicType, CommandDescription, CommandKind, FieldDescription, TypeDescription,
-};
+use fs_types::{BasicType, CommandDescription, CommandKind, FieldDescription, TypeDescription};
 
 fn len(n: usize) -> u32 {
     u32::try_from(n).unwrap_or(u32::MAX)
 }
 
-fn write_fields(fields: &[FieldDescription], mut list: capnp::struct_list::Builder<'_, wire::field_description::Owned>) {
+fn write_fields(
+    fields: &[FieldDescription],
+    mut list: capnp::struct_list::Builder<'_, wire::field_description::Owned>,
+) {
     for (i, f) in (0..).zip(fields) {
         let mut b = list.reborrow().get(i);
         b.set_name(&f.name);
@@ -45,7 +46,9 @@ pub fn write_catalog(
         for (j, c) in (0..).zip(&t.commands) {
             let mut cb = cmds.reborrow().get(j);
             cb.set_name(&c.name);
-            cb.set_kind(wire::CommandKind::try_from(c.kind as u16).unwrap_or(wire::CommandKind::Unknown));
+            cb.set_kind(
+                wire::CommandKind::try_from(c.kind as u16).unwrap_or(wire::CommandKind::Unknown),
+            );
             cb.set_label(&c.label);
             write_fields(&c.input, cb.reborrow().init_input(len(c.input.len())));
             write_fields(&c.result, cb.init_result(len(c.result.len())));
@@ -53,7 +56,9 @@ pub fn write_catalog(
     }
 }
 
-fn read_fields(list: capnp::struct_list::Reader<'_, wire::field_description::Owned>) -> capnp::Result<Vec<FieldDescription>> {
+fn read_fields(
+    list: capnp::struct_list::Reader<'_, wire::field_description::Owned>,
+) -> capnp::Result<Vec<FieldDescription>> {
     list.iter()
         .map(|r| {
             let choices = r
@@ -63,7 +68,8 @@ fn read_fields(list: capnp::struct_list::Reader<'_, wire::field_description::Own
                 .collect::<capnp::Result<Vec<_>>>()?;
             Ok(FieldDescription {
                 name: r.get_name()?.to_string()?,
-                basic: BasicType::try_from(r.get_basic().map_or(0, |b| b as u16)).unwrap_or(BasicType::Unknown),
+                basic: BasicType::try_from(r.get_basic().map_or(0, |b| b as u16))
+                    .unwrap_or(BasicType::Unknown),
                 required: r.get_required(),
                 multiple: r.get_multiple(),
                 label: r.get_label()?.to_string()?,
@@ -89,7 +95,8 @@ pub fn read_catalog(
                 .map(|c| {
                     Ok(CommandDescription {
                         name: c.get_name()?.to_string()?,
-                        kind: CommandKind::try_from(c.get_kind().map_or(0, |k| k as u16)).unwrap_or(CommandKind::Unknown),
+                        kind: CommandKind::try_from(c.get_kind().map_or(0, |k| k as u16))
+                            .unwrap_or(CommandKind::Unknown),
                         label: c.get_label()?.to_string()?,
                         input: read_fields(c.get_input()?)?,
                         result: read_fields(c.get_result()?)?,

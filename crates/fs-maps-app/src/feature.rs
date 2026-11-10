@@ -9,8 +9,8 @@ use fs_maps_core::geouri::GeoUri;
 use fs_types::{RecordIssue, RecordProblem, TypeProblem};
 use serde_json::{Map, Value, json};
 
-use fs_admin_frontend::Values;
 use crate::remote::Place;
+use fs_admin_frontend::Values;
 
 fn issue(field: &str, problem: TypeProblem) -> RecordIssue {
     RecordIssue {
@@ -69,8 +69,15 @@ pub(crate) fn values_of(place: &Place) -> Result<(Value, Values), String> {
     let feature: Value = serde_json::from_str(&place.geojson)
         .map_err(|e| format!("the place holds no readable GeoJSON ({e})"))?;
     let mut values = Values::new();
-    let text = |key: &str| property(&feature, key).and_then(Value::as_str).map(str::to_owned);
-    values.insert("name".into(), vec![text("name").unwrap_or_else(|| place.name.clone())]);
+    let text = |key: &str| {
+        property(&feature, key)
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    };
+    values.insert(
+        "name".into(),
+        vec![text("name").unwrap_or_else(|| place.name.clone())],
+    );
     if let Some(p) = point(&feature) {
         values.insert("position".into(), vec![p.to_string()]);
     }
@@ -78,7 +85,10 @@ pub(crate) fn values_of(place: &Place) -> Result<(Value, Values), String> {
         values.insert("description".into(), vec![d]);
     }
     if let Some(k) = property(&feature, "keywords").and_then(Value::as_array) {
-        let words: Vec<String> = k.iter().filter_map(|w| w.as_str().map(str::to_owned)).collect();
+        let words: Vec<String> = k
+            .iter()
+            .filter_map(|w| w.as_str().map(str::to_owned))
+            .collect();
         if !words.is_empty() {
             values.insert("keywords".into(), words);
         }
@@ -110,13 +120,16 @@ pub(crate) fn apply(feature: &mut Value, input: &Values) -> Result<(), Vec<Recor
             if !was_point {
                 return Err(vec![issue("position", TypeProblem::BadPlace)]);
             }
-            let p = GeoUri::parse(uri).map_err(|_| vec![issue("position", TypeProblem::BadPlace)])?;
+            let p =
+                GeoUri::parse(uri).map_err(|_| vec![issue("position", TypeProblem::BadPlace)])?;
             let mut c = vec![json!(p.lon), json!(p.lat)];
             c.extend(p.alt.map(|a| json!(a)));
             Some(json!({"type": "Point", "coordinates": c}))
         }
     };
-    let root = feature.as_object_mut().ok_or_else(|| vec![issue("name", TypeProblem::Empty)])?;
+    let root = feature
+        .as_object_mut()
+        .ok_or_else(|| vec![issue("name", TypeProblem::Empty)])?;
     if let Some(g) = geometry {
         root.insert("geometry".into(), g);
         root.remove("bbox"); // a moved point is no longer inside it
@@ -131,7 +144,9 @@ pub(crate) fn apply(feature: &mut Value, input: &Values) -> Result<(), Vec<Recor
         return Ok(());
     };
     let mut set = |key: &str, field: &str, list: bool| {
-        let Some(values) = input.get(field) else { return };
+        let Some(values) = input.get(field) else {
+            return;
+        };
         let values: Vec<&String> = values.iter().filter(|v| !v.trim().is_empty()).collect();
         if values.is_empty() {
             properties.remove(key);

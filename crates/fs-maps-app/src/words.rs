@@ -25,8 +25,14 @@ const TABLE: &[(&str, &str)] = &[
     ("message.done", "Done."),
     ("message.rejected", "The program did not accept this."),
     ("message.not-found", "There is no such record."),
-    ("message.unavailable", "The maps program cannot be reached or cannot do this yet."),
-    ("message.unsaved", "There is unsaved text; save or cancel it first."),
+    (
+        "message.unavailable",
+        "The maps program cannot be reached or cannot do this yet.",
+    ),
+    (
+        "message.unsaved",
+        "There is unsaved text; save or cancel it first.",
+    ),
     ("list.empty", "Nothing here yet."),
     ("list.stale", "Not up to date"),
     ("detail.not-loaded", "This record is not loaded."),
@@ -56,7 +62,9 @@ pub struct English;
 fn spelled(key: &str) -> String {
     let last = key.rsplit('.').next().unwrap_or(key).replace('-', " ");
     let mut chars = last.chars();
-    chars.next().map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
+    chars
+        .next()
+        .map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
 }
 
 impl Say for English {

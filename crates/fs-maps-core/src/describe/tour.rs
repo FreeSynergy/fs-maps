@@ -19,20 +19,34 @@ impl DescribesType for MapTourType {
             let name = field(T, "name", BasicType::Text);
             c.input(if name_required { name.required() } else { name })
                 .input(field(T, "description", BasicType::MultilineText))
-                .input(field(T, "stops", BasicType::Reference).target("Place").multiple())
+                .input(
+                    field(T, "stops", BasicType::Reference)
+                        .target("Place")
+                        .multiple(),
+                )
         };
-        TypeDescription::new("MapTour", "fs-maps", "ActivityStreams OrderedCollection of Place", T)
-            .field(field(T, "name", BasicType::Text).required())
-            .field(field(T, "description", BasicType::MultilineText))
-            .field(field(T, "stops", BasicType::Reference).target("Place").multiple())
-            .command(find(T))
-            .command(own(command(T, "create", CommandKind::Create), true).result(
-                field(T, "id", BasicType::Reference).target("MapTour"),
-            ))
-            .command(own(
-                command(T, "change", CommandKind::Change).input(record(T, "MapTour")),
-                false,
-            ))
-            .command(command(T, "delete", CommandKind::Delete).input(record(T, "MapTour")))
+        TypeDescription::new(
+            "MapTour",
+            "fs-maps",
+            "ActivityStreams OrderedCollection of Place",
+            T,
+        )
+        .field(field(T, "name", BasicType::Text).required())
+        .field(field(T, "description", BasicType::MultilineText))
+        .field(
+            field(T, "stops", BasicType::Reference)
+                .target("Place")
+                .multiple(),
+        )
+        .command(find(T))
+        .command(
+            own(command(T, "create", CommandKind::Create), true)
+                .result(field(T, "id", BasicType::Reference).target("MapTour")),
+        )
+        .command(own(
+            command(T, "change", CommandKind::Change).input(record(T, "MapTour")),
+            false,
+        ))
+        .command(command(T, "delete", CommandKind::Delete).input(record(T, "MapTour")))
     }
 }

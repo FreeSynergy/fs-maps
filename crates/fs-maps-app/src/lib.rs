@@ -16,8 +16,8 @@ mod feature;
 pub mod gui;
 pub mod map;
 mod remote;
-mod words;
 pub mod window;
+mod words;
 
 pub use backend::{Listener, PlacesBackend};
 pub use remote::{ApiError, Place, PlacesApi, PlacesRemote};

@@ -11,14 +11,12 @@ mod support;
 mod tour;
 mod wire;
 
-use fs_types::{
-    BasicType, CommandDescription, CommandKind, FieldDescription, TypeRegistry,
-};
+use fs_types::{BasicType, CommandDescription, CommandKind, FieldDescription, TypeRegistry};
 
 pub use layer::MapLayerType;
 pub use place::PlaceType;
 pub use region::RegionType;
-pub use support::{Support, SUPPORT, unsupported};
+pub use support::{SUPPORT, Support, unsupported};
 pub use tour::MapTourType;
 pub use wire::{read_catalog, write_catalog};
 

@@ -21,23 +21,31 @@ impl DescribesType for RegionType {
                 .input(field(T, "minZoom", BasicType::Text).required())
                 .input(field(T, "maxZoom", BasicType::Text).required())
         };
-        TypeDescription::new("Region", "fs-maps", "PMTiles v3 package; geo: URI (RFC 5870)", T)
-            .field(field(T, "name", BasicType::Text).required())
-            .field(field(T, "southwest", BasicType::Place).required())
-            .field(field(T, "northeast", BasicType::Place).required())
-            .field(field(T, "minZoom", BasicType::Text).required())
-            .field(field(T, "maxZoom", BasicType::Text).required())
-            .command(find(T))
-            // The exact tile count and a size estimate before the download.
-            .command(
-                area(command(T, "estimate", CommandKind::Other))
-                    .result(field(T, "tiles", BasicType::Text))
-                    .result(field(T, "size", BasicType::Text)),
+        TypeDescription::new(
+            "Region",
+            "fs-maps",
+            "PMTiles v3 package; geo: URI (RFC 5870)",
+            T,
+        )
+        .field(field(T, "name", BasicType::Text).required())
+        .field(field(T, "southwest", BasicType::Place).required())
+        .field(field(T, "northeast", BasicType::Place).required())
+        .field(field(T, "minZoom", BasicType::Text).required())
+        .field(field(T, "maxZoom", BasicType::Text).required())
+        .command(find(T))
+        // The exact tile count and a size estimate before the download.
+        .command(
+            area(command(T, "estimate", CommandKind::Other))
+                .result(field(T, "tiles", BasicType::Text))
+                .result(field(T, "size", BasicType::Text)),
+        )
+        .command(
+            area(
+                command(T, "download", CommandKind::Create)
+                    .input(field(T, "name", BasicType::Text).required()),
             )
-            .command(
-                area(command(T, "download", CommandKind::Create).input(field(T, "name", BasicType::Text).required()))
-                    .result(field(T, "id", BasicType::Reference).target("Region")),
-            )
-            .command(command(T, "delete", CommandKind::Delete).input(record(T, "Region")))
+            .result(field(T, "id", BasicType::Reference).target("Region")),
+        )
+        .command(command(T, "delete", CommandKind::Delete).input(record(T, "Region")))
     }
 }

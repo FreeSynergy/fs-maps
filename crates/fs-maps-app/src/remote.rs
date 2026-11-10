@@ -12,8 +12,8 @@ use std::sync::mpsc;
 use std::thread;
 
 use fs_interfaces::places_capnp::{place, place_page, places, tile_source};
-use fs_maps_core::describe::read_catalog;
 use fs_interfaces::rpc::{Problem, connect, read_envelope, write_uuid};
+use fs_maps_core::describe::read_catalog;
 use fs_types::TypeDescription;
 use uuid::Uuid;
 
@@ -147,7 +147,11 @@ where
 }
 
 fn page_of(page: place_page::Reader<'_>) -> capnp::Result<(Vec<Place>, Vec<u8>)> {
-    let items = page.get_items()?.iter().map(read_place).collect::<capnp::Result<_>>()?;
+    let items = page
+        .get_items()?
+        .iter()
+        .map(read_place)
+        .collect::<capnp::Result<_>>()?;
     Ok((items, page.get_next()?.get_opaque()?.to_vec()))
 }
 
@@ -254,7 +258,10 @@ impl PlacesApi for PlacesRemote {
         })
     }
 
-    fn within(&self, (west, south, east, north): (f64, f64, f64, f64)) -> Result<Vec<Place>, ApiError> {
+    fn within(
+        &self,
+        (west, south, east, north): (f64, f64, f64, f64),
+    ) -> Result<Vec<Place>, ApiError> {
         self.run(move |c| async move {
             collect(|cursor| {
                 let mut request = c.within_request();

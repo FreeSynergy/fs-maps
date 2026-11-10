@@ -45,7 +45,9 @@ pub fn about() -> AboutInfo {
 /// [`AppError`] if the shell cannot be made; a message for the person if the server has no type description.
 pub fn app(api: &Arc<dyn PlacesApi>, width: f64, height: f64) -> Result<AppWidget, String> {
     let say: Arc<dyn Say> = Arc::new(English);
-    let descriptions = api.types().map_err(|e| format!("the maps server gave no type description: {e:?}"))?;
+    let descriptions = api
+        .types()
+        .map_err(|e| format!("the maps server gave no type description: {e:?}"))?;
     let markers = PlaceMarkers::new(Arc::clone(api));
     let map = MapSurface::new(
         MAP,
@@ -62,17 +64,37 @@ pub fn app(api: &Arc<dyn PlacesApi>, width: f64, height: f64) -> Result<AppWidge
         }
         let (id, label) = (d.name.clone(), d.label.clone());
         let session = Session::new(d, backend, Arc::new(SystemClock::new()));
-        let surface = AdminSurface::new(session, Look::new(StyleId::Admin, false), Arc::clone(&say), None);
-        views.push(TypeView { id, label, surface: Arc::new(surface) });
+        let surface = AdminSurface::new(
+            session,
+            Look::new(StyleId::Admin, false),
+            Arc::clone(&say),
+            None,
+        );
+        views.push(TypeView {
+            id,
+            label,
+            surface: Arc::new(surface),
+        });
     }
-    let mut screens = vec![Screen::new(MAP, say.say("view.map"), Arc::new(map.clone()) as Arc<dyn Surface>)];
+    let mut screens = vec![Screen::new(
+        MAP,
+        say.say("view.map"),
+        Arc::new(map.clone()) as Arc<dyn Surface>,
+    )];
     screens.extend(views.iter().map(|v| {
-        Screen::new(v.id.clone(), say.say(&v.label), Arc::clone(&v.surface) as Arc<dyn Surface>)
+        Screen::new(
+            v.id.clone(),
+            say.say(&v.label),
+            Arc::clone(&v.surface) as Arc<dyn Surface>,
+        )
     }));
     let app = AppWidget::new(TITLE, screens).map_err(|e: AppError| e.to_string())?;
     let mut menus = standard_menus(&*say, &views);
     if let Some(view) = menus.get_mut(1) {
-        view.entries.insert(0, MenuEntry::new(format!("{VIEW_PREFIX}{MAP}"), say.say("menu.map")));
+        view.entries.insert(
+            0,
+            MenuEntry::new(format!("{VIEW_PREFIX}{MAP}"), say.say("menu.map")),
+        );
     }
     let shell = app.clone();
     let surfaces: Vec<_> = views.into_iter().map(|v| (v.id, v.surface)).collect();
@@ -80,7 +102,11 @@ pub fn app(api: &Arc<dyn PlacesApi>, width: f64, height: f64) -> Result<AppWidge
     let (pick_shell, pick_surfaces) = (app.clone(), surfaces.clone());
     markers.on_pick(move |key| {
         if let Some((_, s)) = pick_surfaces.iter().find(|(id, _)| id == "Place") {
-            let opened = s.session().lock().unwrap_or_else(std::sync::PoisonError::into_inner).open_detail(key);
+            let opened = s
+                .session()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .open_detail(key);
             if opened {
                 s.refresh();
                 pick_shell.select("Place");
@@ -108,7 +134,9 @@ pub fn app(api: &Arc<dyn PlacesApi>, width: f64, height: f64) -> Result<AppWidge
             HELP => fs_components_widgets::open_external(HELP_URL),
             ABOUT => {
                 // About is a page of the generated screens; from the map, go to the first of them.
-                let target = current().filter(|c| surfaces.iter().any(|(i, _)| i == c)).or_else(|| surfaces.first().map(|(i, _)| i.clone()));
+                let target = current()
+                    .filter(|c| surfaces.iter().any(|(i, _)| i == c))
+                    .or_else(|| surfaces.first().map(|(i, _)| i.clone()));
                 if let Some(t) = target {
                     shell.select(&t);
                     if let Some((_, s)) = surfaces.iter().find(|(i, _)| *i == t) {

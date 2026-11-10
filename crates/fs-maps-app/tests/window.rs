@@ -35,7 +35,6 @@ fn start_server(socket: &Path) {
     started.recv().unwrap();
 }
 
-
 #[test]
 fn the_window_has_the_map_and_a_screen_per_type_and_the_standard_menus() {
     let dir = tempfile::tempdir().unwrap();
@@ -47,8 +46,16 @@ fn the_window_has_the_map_and_a_screen_per_type_and_the_standard_menus() {
     app.with_shell(|s| {
         let ids: Vec<&str> = s.screens().iter().map(|c| c.id.as_str()).collect();
         assert_eq!(ids, ["map", "MapLayer", "MapTour", "Place", "Region"]);
-        let entries: Vec<&str> = s.menus().iter().flat_map(|m| m.entries.iter().map(|e| e.id.as_str())).collect();
-        assert!(entries.contains(&"view-map") && entries.contains(&"program-quit") && entries.contains(&"help-about"));
+        let entries: Vec<&str> = s
+            .menus()
+            .iter()
+            .flat_map(|m| m.entries.iter().map(|e| e.id.as_str()))
+            .collect();
+        assert!(
+            entries.contains(&"view-map")
+                && entries.contains(&"program-quit")
+                && entries.contains(&"help-about")
+        );
     });
     assert!(app.select("Place"));
 }

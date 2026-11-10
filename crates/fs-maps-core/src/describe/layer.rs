@@ -24,7 +24,11 @@ impl DescribesType for MapLayerType {
                         .choices(&["places", "geojson", "wfs", "wmts", "pmtiles"]),
                 )
                 .input(field(T, "url", BasicType::Link))
-                .input(field(T, "places", BasicType::Reference).target("Place").multiple())
+                .input(
+                    field(T, "places", BasicType::Reference)
+                        .target("Place")
+                        .multiple(),
+                )
         };
         TypeDescription::new(
             "MapLayer",
@@ -40,11 +44,16 @@ impl DescribesType for MapLayerType {
                 .choices(&["places", "geojson", "wfs", "wmts", "pmtiles"]),
         )
         .field(field(T, "url", BasicType::Link))
-        .field(field(T, "places", BasicType::Reference).target("Place").multiple())
+        .field(
+            field(T, "places", BasicType::Reference)
+                .target("Place")
+                .multiple(),
+        )
         .command(find(T))
-        .command(own(command(T, "create", CommandKind::Create), true).result(
-            field(T, "id", BasicType::Reference).target("MapLayer"),
-        ))
+        .command(
+            own(command(T, "create", CommandKind::Create), true)
+                .result(field(T, "id", BasicType::Reference).target("MapLayer")),
+        )
         .command(own(
             command(T, "change", CommandKind::Change).input(record(T, "MapLayer")),
             false,
@@ -56,7 +65,11 @@ impl DescribesType for MapLayerType {
         .command(
             command(T, "invite", CommandKind::Other)
                 .input(record(T, "MapLayer"))
-                .input(field(T, "person", BasicType::Reference).target("Person").required()),
+                .input(
+                    field(T, "person", BasicType::Reference)
+                        .target("Person")
+                        .required(),
+                ),
         )
         // Comment on a map without an editing seat (Felt): an ActivityStreams Note.
         .command(

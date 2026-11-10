@@ -57,25 +57,42 @@ impl PlacesBackend {
 
     /// Ask to be told after every write that went through.
     pub fn subscribe(&self, listener: Listener) {
-        self.listeners.lock().unwrap_or_else(PoisonError::into_inner).push(listener);
+        self.listeners
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(listener);
     }
 
     fn told(&self) {
-        let all = self.listeners.lock().unwrap_or_else(PoisonError::into_inner).clone();
+        let all = self
+            .listeners
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
         all.iter().for_each(|l| l());
     }
 
     fn record(place: &Place) -> Result<Record, BackendError> {
         let (_, values) = values_of(place).map_err(BackendError::Unavailable)?;
-        Ok(Record { id: place.id.clone(), values })
+        Ok(Record {
+            id: place.id.clone(),
+            values,
+        })
     }
 
     fn fetch(&self, id: &str) -> Result<Place, BackendError> {
-        self.api.get(id).map_err(error)?.ok_or(BackendError::NotFound)
+        self.api
+            .get(id)
+            .map_err(error)?
+            .ok_or(BackendError::NotFound)
     }
 
     fn id_of(input: &Values) -> Result<&str, BackendError> {
-        input.get("id").and_then(|v| v.first()).map(String::as_str).ok_or(BackendError::NotFound)
+        input
+            .get("id")
+            .and_then(|v| v.first())
+            .map(String::as_str)
+            .ok_or(BackendError::NotFound)
     }
 
     fn write(&self, name: &str, input: &Values) -> Result<Outcome, BackendError> {
@@ -84,7 +101,10 @@ impl PlacesBackend {
                 let feature = new_feature(input).map_err(BackendError::Rejected)?;
                 let made = self.api.create(&feature.to_string()).map_err(error)?;
                 self.told();
-                Ok(Outcome { id: Some(made.id.clone()), values: Values::from([("id".to_owned(), vec![made.id])]) })
+                Ok(Outcome {
+                    id: Some(made.id.clone()),
+                    values: Values::from([("id".to_owned(), vec![made.id])]),
+                })
             }
             "change" => {
                 let id = Self::id_of(input)?;
@@ -93,7 +113,10 @@ impl PlacesBackend {
                 apply(&mut feature, input).map_err(BackendError::Rejected)?;
                 let saved = self.api.update(id, &feature.to_string()).map_err(error)?;
                 self.told();
-                Ok(Outcome { id: Some(saved.id), values: Values::new() })
+                Ok(Outcome {
+                    id: Some(saved.id),
+                    values: Values::new(),
+                })
             }
             "delete" => {
                 let id = Self::id_of(input)?;

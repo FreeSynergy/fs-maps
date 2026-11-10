@@ -11,8 +11,8 @@ use std::sync::Arc;
 
 use capnp_rpc::new_client;
 use fs_interfaces::places_capnp::{places, tile_source};
-use fs_interfaces::types_capnp::type_catalog;
 use fs_interfaces::rpc::{check_answer, invalid_request, read_object_id, run_to_end};
+use fs_interfaces::types_capnp::type_catalog;
 use fs_maps_core::{Paging, PlaceFeed, Places, TileSource};
 
 use crate::catalog_service::CatalogImpl;

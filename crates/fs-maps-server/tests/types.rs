@@ -23,7 +23,10 @@ async fn the_catalog_answers_every_type_with_every_command() {
         let read = read_catalog(answer.get().unwrap().get_types().unwrap()).unwrap();
         let expected: Vec<_> = registry().iter().cloned().collect();
         assert_eq!(read, expected);
-        assert!(read.iter().any(|t| t.name == "Place" && t.find_command("within").is_some()));
+        assert!(
+            read.iter()
+                .any(|t| t.name == "Place" && t.find_command("within").is_some())
+        );
     })
     .await;
 }

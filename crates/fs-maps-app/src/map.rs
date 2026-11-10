@@ -21,7 +21,11 @@ pub struct PlaceMarkers {
 impl PlaceMarkers {
     /// The markers of the places `api` has now.
     pub fn new(api: Arc<dyn PlacesApi>) -> Arc<Self> {
-        let me = Arc::new(Self { api, markers: Mutex::default(), pick: OnceLock::new() });
+        let me = Arc::new(Self {
+            api,
+            markers: Mutex::default(),
+            pick: OnceLock::new(),
+        });
         me.reload();
         me
     }
@@ -34,7 +38,11 @@ impl PlaceMarkers {
             .filter_map(|p| {
                 let (feature, values) = values_of(p).ok()?;
                 let (lon, lat) = anchor(&feature)?;
-                let name = values.get("name").and_then(|v| v.first()).cloned().unwrap_or_default();
+                let name = values
+                    .get("name")
+                    .and_then(|v| v.first())
+                    .cloned()
+                    .unwrap_or_default();
                 Some(Marker::new(p.id.clone(), lon, lat).labelled(name))
             })
             .collect();
@@ -63,7 +71,10 @@ impl PlaceMarkers {
 
 impl MapData for PlaceMarkers {
     fn markers(&self) -> Vec<Marker> {
-        self.markers.lock().unwrap_or_else(PoisonError::into_inner).clone()
+        self.markers
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     fn picked(&self, key: &str) {
@@ -74,7 +85,10 @@ impl MapData for PlaceMarkers {
 }
 
 /// Redraw `surface` after every write that went through.
-pub fn follow(markers: &Arc<PlaceMarkers>, surface: &MapSurface) -> impl Fn() + Send + Sync + 'static {
+pub fn follow(
+    markers: &Arc<PlaceMarkers>,
+    surface: &MapSurface,
+) -> impl Fn() + Send + Sync + 'static {
     let (markers, surface) = (Arc::clone(markers), surface.clone());
     move || {
         markers.reload();

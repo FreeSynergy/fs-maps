@@ -18,7 +18,10 @@ fn all_four_types_are_valid_and_registered() {
     names.sort_unstable();
     assert_eq!(names, ["MapLayer", "MapTour", "Place", "Region"]);
     assert_eq!(r.len(), 4);
-    assert!(r.unresolved_targets().iter().all(|(_, _, t)| t == "Person"), "only the people program is outside");
+    assert!(
+        r.unresolved_targets().iter().all(|(_, _, t)| t == "Person"),
+        "only the people program is outside"
+    );
 }
 
 #[test]
@@ -50,7 +53,10 @@ fn every_command_of_the_core_and_of_the_requirements_is_described() {
         ("MapLayer", "comment"),
         ("MapLayer", "webhook"),
     ] {
-        assert!(r.get(ty).and_then(|t| t.find_command(cmd)).is_some(), "{ty}.{cmd}");
+        assert!(
+            r.get(ty).and_then(|t| t.find_command(cmd)).is_some(),
+            "{ty}.{cmd}"
+        );
     }
 }
 
@@ -75,10 +81,16 @@ fn the_support_table_and_the_descriptions_name_the_same_commands() {
 
 #[test]
 fn design_lists_every_unsupported_command() {
-    let section = DESIGN.split("## Unsupported").nth(1).expect("DESIGN.md has the section `Unsupported`");
+    let section = DESIGN
+        .split("## Unsupported")
+        .nth(1)
+        .expect("DESIGN.md has the section `Unsupported`");
     for s in unsupported() {
         let key = format!("`{}.{}`", s.data_type, s.command);
-        assert!(section.contains(&key), "{key} is missing under `Unsupported` in DESIGN.md");
+        assert!(
+            section.contains(&key),
+            "{key} is missing under `Unsupported` in DESIGN.md"
+        );
     }
 }
 
@@ -88,7 +100,9 @@ fn a_command_on_one_record_names_its_own_type() {
         for c in &t.commands {
             if matches!(c.kind, CommandKind::Change | CommandKind::Delete) {
                 assert!(
-                    c.input.iter().any(|f| f.basic == BasicType::Reference && f.target == t.name),
+                    c.input
+                        .iter()
+                        .any(|f| f.basic == BasicType::Reference && f.target == t.name),
                     "{}.{} must refer to the record it works on",
                     t.name,
                     c.name
