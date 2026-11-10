@@ -11,11 +11,13 @@ use fs_components_map::{MapData, MapPosition, MapSurface, Marker, TileBytes, Til
 use crate::feature::{anchor, values_of};
 use crate::remote::PlacesApi;
 
+type Pick = Box<dyn Fn(&str) + Send + Sync>;
+
 /// The places as markers; a marker is chosen through the `pick` the window sets.
 pub struct PlaceMarkers {
     api: Arc<dyn PlacesApi>,
     markers: Mutex<Vec<Marker>>,
-    pick: OnceLock<Box<dyn Fn(&str) + Send + Sync>>,
+    pick: OnceLock<Pick>,
 }
 
 impl PlaceMarkers {

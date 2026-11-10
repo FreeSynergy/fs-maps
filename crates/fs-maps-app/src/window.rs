@@ -113,8 +113,20 @@ pub fn app(api: &Arc<dyn PlacesApi>, width: f64, height: f64) -> Result<AppWidge
             }
         }
     });
-    let info = about();
-    app.set_menus(menus, move |id| {
+    app.set_menus(menus, menu_handler(shell, surfaces, about()))
+        .map_err(|e| e.to_string())?;
+    Ok(app)
+}
+
+type Surfaces = Vec<(String, Arc<AdminSurface>)>;
+
+/// What the entries of the menus do (the same as `admin_window`'s, plus the entry of the map).
+fn menu_handler(
+    shell: AppWidget,
+    surfaces: Surfaces,
+    info: AboutInfo,
+) -> impl Fn(&str) + Send + Sync + 'static {
+    move |id| {
         let current = || shell.with_shell(|s| s.current().map(|c| c.id.clone()));
         match id {
             QUIT => {
@@ -150,7 +162,5 @@ pub fn app(api: &Arc<dyn PlacesApi>, width: f64, height: f64) -> Result<AppWidge
                 }
             }
         }
-    })
-    .map_err(|e| e.to_string())?;
-    Ok(app)
+    }
 }

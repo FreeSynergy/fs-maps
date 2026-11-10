@@ -69,7 +69,9 @@ impl PlacesBackend {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
-        all.iter().for_each(|l| l());
+        for l in &all {
+            l();
+        }
     }
 
     fn record(place: &Place) -> Result<Record, BackendError> {

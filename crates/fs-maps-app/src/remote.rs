@@ -13,6 +13,7 @@ use std::thread;
 
 use fs_interfaces::places_capnp::{place, place_page, places, tile_source};
 use fs_interfaces::rpc::{Problem, connect, read_envelope, write_uuid};
+use fs_interfaces::types_capnp::type_catalog;
 use fs_maps_core::describe::read_catalog;
 use fs_types::TypeDescription;
 use uuid::Uuid;
@@ -290,7 +291,7 @@ impl PlacesApi for PlacesRemote {
                 .send()
                 .promise
                 .await
-                .and_then(|a| Ok(a.get()?.get_catalog()?))
+                .and_then(|a| a.get()?.get_catalog())
                 .map_err(|e| problem(&e))?;
             let answer = catalog
                 .describe_request()
@@ -300,7 +301,7 @@ impl PlacesApi for PlacesRemote {
                 .map_err(|e| problem(&e))?;
             answer
                 .get()
-                .and_then(|r| r.get_types())
+                .and_then(type_catalog::describe_results::Reader::get_types)
                 .and_then(read_catalog)
                 .map_err(|e| problem(&e))
         })
@@ -313,7 +314,7 @@ impl PlacesApi for PlacesRemote {
                 .send()
                 .promise
                 .await
-                .and_then(|a| Ok(a.get()?.get_source()?))
+                .and_then(|a| a.get()?.get_source())
                 .map_err(|e| problem(&e))?;
             let mut request = source.tile_request();
             request.get().set_z(z);
