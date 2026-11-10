@@ -11,7 +11,7 @@ name = "fs_maps_server"
 
 [dependencies]
 fs-maps-core = { path = "../fs-maps-core" }
-fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.8", features = ["rpc"] }
+fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.14", features = ["rpc"] }
 fs-objects = { git = "https://github.com/FreeSynergy/fs-objects", tag = "v0.0.1" }
 capnp = "0.27"
 fs-types = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.2" }

@@ -8,7 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 fs-maps-core = { path = "../fs-maps-core" }
-fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.8", features = ["rpc"] }
+fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.14", features = ["rpc"] }
 fs-types = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.2" }
 # One revision of fs-components for all of them (the shell types must be the same crate): the commit 31a6dc0 is
 # 4688cee (fs-admin-frontend as asked) plus the new crate fs-components-map. No tag yet (reported).

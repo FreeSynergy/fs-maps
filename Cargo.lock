@@ -1704,16 +1704,7 @@ dependencies = [
 [[package]]
 name = "fs-interfaces"
 version = "0.0.1"
-source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.2#a8c28ea86f863db92f0d333fcf27b0d012fd8832"
-dependencies = [
- "capnp",
- "idna",
-]
-
-[[package]]
-name = "fs-interfaces"
-version = "0.0.1"
-source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8#8d9cc469cfc2fead4d0df2e66707e3996e95bf35"
+source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.14#3f93a1a8531676fb243e09cb36a5537981c8ebf3"
 dependencies = [
  "capnp",
  "capnp-rpc",
@@ -1727,12 +1718,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-interfaces"
+version = "0.0.1"
+source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.2#a8c28ea86f863db92f0d333fcf27b0d012fd8832"
+dependencies = [
+ "capnp",
+ "idna",
+]
+
+[[package]]
 name = "fs-maps"
 version = "0.0.4"
 dependencies = [
  "async-trait",
  "capnp",
- "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8)",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.14)",
  "fs-maps-app",
  "fs-maps-core",
  "fs-maps-server",
@@ -1752,7 +1752,7 @@ dependencies = [
  "fs-components-map",
  "fs-components-styles",
  "fs-components-widgets",
- "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8)",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.14)",
  "fs-maps-core",
  "fs-maps-server",
  "fs-objects",
@@ -1772,7 +1772,7 @@ dependencies = [
  "bytes",
  "capnp",
  "flate2",
- "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8)",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.14)",
  "fs-objects",
  "fs-types",
  "pmtiles",
@@ -1792,7 +1792,7 @@ dependencies = [
  "async-trait",
  "capnp",
  "capnp-rpc",
- "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8)",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.14)",
  "fs-maps-core",
  "fs-objects",
  "fs-types",
