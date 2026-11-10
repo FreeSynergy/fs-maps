@@ -23,7 +23,7 @@ fs-maps-app = { path = "../fs-maps-app", optional = true }
 
 [dev-dependencies]
 fs-maps-core = { path = "../fs-maps-core" }
-fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.1", features = ["rpc"] }
+fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.8", features = ["rpc"] }
 fs-objects = { git = "https://github.com/FreeSynergy/fs-objects", tag = "v0.0.1" }
 tempfile = "3"
 tokio = { version = "1", features = ["full"] }

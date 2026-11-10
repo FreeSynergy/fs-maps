@@ -7,7 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.1", features = ["rpc"] }
+fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.8", features = ["rpc"] }
 fs-components-app = { git = "https://github.com/FreeSynergy/fs-components", tag = "v0.0.2" }
 fs-components-workbenches = { git = "https://github.com/FreeSynergy/fs-components", tag = "v0.0.2" }
 capnp = "0.27"

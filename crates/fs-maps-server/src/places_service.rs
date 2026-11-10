@@ -11,9 +11,11 @@ use std::sync::Arc;
 
 use capnp_rpc::new_client;
 use fs_interfaces::places_capnp::{places, tile_source};
+use fs_interfaces::types_capnp::type_catalog;
 use fs_interfaces::rpc::{check_answer, invalid_request, read_object_id, run_to_end};
 use fs_maps_core::{Paging, PlaceFeed, Places, TileSource};
 
+use crate::catalog_service::CatalogImpl;
 use crate::errors::rpc_error;
 use crate::feed::{offered, subscribe};
 use crate::tiles_service::TilesImpl;
@@ -26,6 +28,7 @@ pub struct MapsServer {
     places: Arc<dyn Places>,
     feed: Arc<dyn PlaceFeed>,
     tiles: tile_source::Client,
+    catalog: type_catalog::Client,
 }
 
 impl MapsServer {
@@ -39,6 +42,7 @@ impl MapsServer {
             places,
             feed,
             tiles: new_client(TilesImpl { source: tiles }),
+            catalog: new_client(CatalogImpl::new()),
         }
     }
 
@@ -187,6 +191,15 @@ impl places::Server for MapsServer {
         mut results: places::TilesResults,
     ) -> Done {
         results.get().set_source(self.tiles.clone());
+        Ok(())
+    }
+
+    async fn types(
+        self: Rc<Self>,
+        _: places::TypesParams,
+        mut results: places::TypesResults,
+    ) -> Done {
+        results.get().set_catalog(self.catalog.clone());
         Ok(())
     }
 }

@@ -14,12 +14,14 @@ brotli = "8"
 tokio = { version = "1", features = ["rt", "macros", "fs", "sync"] }
 async-trait = "0.1"
 bytes = "1"
+capnp = "0.27"
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 url = "2"
 # The contract and the provider rule (ADR 0045).
-fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.1" }
+fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.8" }
+fs-types = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.2" }
 fs-objects = { git = "https://github.com/FreeSynergy/fs-objects", tag = "v0.0.1" }
 
 [dev-dependencies]

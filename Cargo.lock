@@ -1603,7 +1603,7 @@ dependencies = [
  "blinc_core",
  "blinc_layout",
  "blinc_theme",
- "fs-interfaces",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.1)",
 ]
 
 [[package]]
@@ -1658,11 +1658,28 @@ version = "0.0.1"
 source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.1#9f2d3a0626d7382b478c754eb31834146188dfab"
 dependencies = [
  "capnp",
+ "idna",
+]
+
+[[package]]
+name = "fs-interfaces"
+version = "0.0.1"
+source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.2#a8c28ea86f863db92f0d333fcf27b0d012fd8832"
+dependencies = [
+ "capnp",
+ "idna",
+]
+
+[[package]]
+name = "fs-interfaces"
+version = "0.0.1"
+source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8#8d9cc469cfc2fead4d0df2e66707e3996e95bf35"
+dependencies = [
+ "capnp",
  "capnp-rpc",
  "chrono",
  "fs-objects",
  "futures",
- "idna",
  "rustix 1.1.6",
  "tokio",
  "tokio-util",
@@ -1675,7 +1692,7 @@ version = "0.0.3"
 dependencies = [
  "async-trait",
  "capnp",
- "fs-interfaces",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8)",
  "fs-maps-app",
  "fs-maps-core",
  "fs-maps-server",
@@ -1691,7 +1708,7 @@ dependencies = [
  "capnp",
  "fs-components-app",
  "fs-components-workbenches",
- "fs-interfaces",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8)",
  "fs-maps-core",
  "fs-maps-server",
  "fs-objects",
@@ -1708,9 +1725,11 @@ dependencies = [
  "async-trait",
  "brotli 8.0.4",
  "bytes",
+ "capnp",
  "flate2",
- "fs-interfaces",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8)",
  "fs-objects",
+ "fs-types",
  "pmtiles",
  "proptest",
  "serde",
@@ -1728,9 +1747,10 @@ dependencies = [
  "async-trait",
  "capnp",
  "capnp-rpc",
- "fs-interfaces",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8)",
  "fs-maps-core",
  "fs-objects",
+ "fs-types",
  "rustix 1.1.6",
  "serde_json",
  "tempfile",
@@ -1753,6 +1773,20 @@ dependencies = [
  "turso",
  "unicode-normalization",
  "uuid",
+]
+
+[[package]]
+name = "fs-types"
+version = "0.0.1"
+source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.2#a8c28ea86f863db92f0d333fcf27b0d012fd8832"
+dependencies = [
+ "capnp",
+ "chrono",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.2)",
+ "geo-uri",
+ "iri-string",
+ "oxilangtag",
+ "unicode-normalization",
 ]
 
 [[package]]
@@ -1892,6 +1926,15 @@ checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "geo-uri"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "951577f365723b622bfa73389a8def7393d56c28a3fc9aff3de17fae98fc868c"
+dependencies = [
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2521,6 +2564,16 @@ name = "ipnet"
 version = "2.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0"
+
+[[package]]
+name = "iri-string"
+version = "0.7.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1663ee7d8cf2900cc1414b1e1eec9f348d6eaa3bcab07579f4726a4b8499f447"
+dependencies = [
+ "memchr",
+ "serde",
+]
 
 [[package]]
 name = "is-docker"
@@ -3457,6 +3510,15 @@ name = "owo-colors"
 version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
+
+[[package]]
+name = "oxilangtag"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d3b4eb570abd4a1dcb062c31fd37b832264d9dc7292c3e69acfe926c87b063f"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "pack1"

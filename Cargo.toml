@@ -9,3 +9,6 @@ version = "0.0.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.89"
+
+# fs-types v0.0.2 (the version fs-admin-frontend uses) brings its own fs-interfaces v0.0.2; ours is the newer one with
+# `Places.types`. Both are in the build; the descriptions cross between them as plain values (`describe/wire.rs`).

@@ -32,6 +32,7 @@
 )]
 
 pub mod cache;
+pub mod describe;
 pub mod error;
 pub mod geouri;
 pub mod places;

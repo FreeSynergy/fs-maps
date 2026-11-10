@@ -155,3 +155,16 @@ file mtime so the order survives restarts). One process owns a cache dir (no cro
 `crates/fs-maps` is the only binary: `fs-maps` without arguments opens the window, `fs-maps serve` runs the server (`fs_maps_server::serve`; tiles from `FS_MAPS_TILES` / `FS_MAPS_TILES_URL`), feature `gui` (default) builds the window. `fs-maps-server` and `fs-maps-app` are libraries. The window (`crates/fs-maps-app`) is a frontend over `places.capnp`: `PlacesApi` (trait first) with `PlacesRemote` (a worker thread owns the Cap'n Proto connection) and `PlacesAdapter`, which gives the places to the list-and-page workbench of `fs-components` (built for people, neutral in what it shows) as rows (name, position), a sheet (position, geo URI, description) and a form (name, latitude, longitude, description). A place that is not a single point is renamed and described, its shape is kept as it is. If no server answers on the user's own socket the window starts `fs-maps serve` detached. Tests: `crates/fs-maps-app/tests/remote.rs` (real server, real store), `crates/fs-maps/tests/binary*.rs`, `memory.rs`, `refusals.rs` (the real binary).
 
 **There is no map yet:** no tile view, no pan or zoom, no place search by area (`within`), no tile download of a region; tiles are served by the server (`tiles.capnp`) and nobody draws them. That view needs its own widget in `fs-components` (raster or vector tiles, pointer and wheel events) and is the next piece. A bad latitude or longitude is refused with a sentence on Save, not while typing.
+
+## Unsupported
+
+Commands the type descriptions (`crates/fs-maps-core/src/describe/`) list but the core does not carry out. The table is `SUPPORT` in `describe/support.rs` (Specification; a test keeps it and this list in step). `types.capnp` has no field `supported` in `CommandDescription` yet (Thread T adds it); until then the table stands in, and the window answers these commands with `BackendError::Unavailable("unsupported:<name>")`. Switch one on in the table only.
+
+* `Place.elevationProfile`: elevation profile along a drawn line (Google Earth); no elevation data in the core.
+* `MapLayer.find`, `MapLayer.create`, `MapLayer.change`, `MapLayer.delete`: the core has no layers.
+* `MapLayer.refresh`: layers connected to a data source that stay current (Felt; WFS, WMTS, GeoJSON).
+* `MapLayer.invite`: several people edit one map live (Felt, uMap).
+* `MapLayer.comment`: comment on a map without an editing seat (Felt; ActivityStreams Note).
+* `MapLayer.webhook`: map events and webhooks for embedding (Felt).
+* `MapTour.find`, `MapTour.create`, `MapTour.change`, `MapTour.delete`: maps with a guided tour or story (ordered stops); the core has no tours.
+* `Region.find`, `Region.estimate`, `Region.download`, `Region.delete`: the core has `RegionDownload` (estimate, download, PMTiles package), but `places.capnp` has no call for it.
