@@ -1,22 +1,29 @@
 [package]
 name = "fs-maps-app"
-description = "The maps program of FreeSynergy, window: places as a list and a sheet (name, position, description), over the Cap'n Proto socket; on fs-components. No map view yet."
+description = "The maps program of FreeSynergy, window: the shell (ADR 0065), the component Karte and the generated Admin frontend over the Cap'n Proto socket. Data and wiring only."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+fs-maps-core = { path = "../fs-maps-core" }
 fs-interfaces = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.8", features = ["rpc"] }
-fs-components-app = { git = "https://github.com/FreeSynergy/fs-components", tag = "v0.0.2" }
-fs-components-workbenches = { git = "https://github.com/FreeSynergy/fs-components", tag = "v0.0.2" }
+fs-types = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.2" }
+# One revision of fs-components for all of them (the shell types must be the same crate): the commit 2bb3dfd is
+# 4688cee (fs-admin-frontend as asked) plus the new crate fs-components-map. No tag yet (reported).
+fs-components-app = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
+fs-admin-frontend = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
+fs-components-fields = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
+fs-components-styles = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
+fs-components-widgets = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
+fs-components-map = { git = "https://github.com/FreeSynergy/fs-components", rev = "2bb3dfdd282ba4fc311931bb5385e6a06e68b89b" }
 capnp = "0.27"
 uuid = "1"
 serde_json = "1"
 tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
 
 [dev-dependencies]
-fs-maps-core = { path = "../fs-maps-core" }
 fs-maps-server = { path = "../fs-maps-server" }
 fs-objects = { git = "https://github.com/FreeSynergy/fs-objects", tag = "v0.0.1" }
 tempfile = "3"

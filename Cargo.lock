@@ -190,6 +190,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "approx"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "arboard"
 version = "3.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -463,8 +472,7 @@ dependencies = [
 [[package]]
 name = "blinc_app"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a93e66de48698f9617edb86cae2e6181b3ed5d62122e765f405690ba70c9f36"
+source = "git+https://github.com/FreeSynergy/blinc-app-fix?rev=5180d4eae80034d851d98464861f098d69eceaf0#5180d4eae80034d851d98464861f098d69eceaf0"
 dependencies = [
  "anyhow",
  "blinc_animation",
@@ -607,8 +615,7 @@ dependencies = [
 [[package]]
 name = "blinc_layout"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5b1b6d2419f33e4bbefee10d5e02819923a4df5977760c5ca45b855039e4d2"
+source = "git+https://github.com/FreeSynergy/blinc-layout-fix?rev=cb17db8111f2037473e6e02b6784628ca0dca151#cb17db8111f2037473e6e02b6784628ca0dca151"
 dependencies = [
  "arboard",
  "blinc_animation",
@@ -1581,9 +1588,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-admin-frontend"
+version = "0.0.2"
+source = "git+https://github.com/FreeSynergy/fs-components?rev=2bb3dfdd282ba4fc311931bb5385e6a06e68b89b#2bb3dfdd282ba4fc311931bb5385e6a06e68b89b"
+dependencies = [
+ "blinc_cn",
+ "blinc_core",
+ "blinc_layout",
+ "blinc_theme",
+ "fs-components-app",
+ "fs-components-fields",
+ "fs-components-primitives",
+ "fs-components-styles",
+ "fs-components-widgets",
+ "fs-types",
+]
+
+[[package]]
 name = "fs-components-app"
 version = "0.0.2"
-source = "git+https://github.com/FreeSynergy/fs-components?tag=v0.0.2#ba60f1fbf42c06e7a2178ccc626bc1da52050e3b"
+source = "git+https://github.com/FreeSynergy/fs-components?rev=2bb3dfdd282ba4fc311931bb5385e6a06e68b89b#2bb3dfdd282ba4fc311931bb5385e6a06e68b89b"
 dependencies = [
  "blinc_app",
  "blinc_cn",
@@ -1595,9 +1619,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-components-fields"
+version = "0.0.2"
+source = "git+https://github.com/FreeSynergy/fs-components?rev=2bb3dfdd282ba4fc311931bb5385e6a06e68b89b#2bb3dfdd282ba4fc311931bb5385e6a06e68b89b"
+dependencies = [
+ "blinc_core",
+ "blinc_layout",
+ "fs-components-styles",
+ "fs-components-widgets",
+ "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.1)",
+]
+
+[[package]]
+name = "fs-components-map"
+version = "0.0.2"
+source = "git+https://github.com/FreeSynergy/fs-components?rev=2bb3dfdd282ba4fc311931bb5385e6a06e68b89b#2bb3dfdd282ba4fc311931bb5385e6a06e68b89b"
+dependencies = [
+ "blinc_core",
+ "blinc_layout",
+ "blinc_theme",
+ "fs-components-app",
+ "fs-components-widgets",
+ "geo-types",
+ "mvt-reader",
+]
+
+[[package]]
 name = "fs-components-primitives"
 version = "0.0.2"
-source = "git+https://github.com/FreeSynergy/fs-components?tag=v0.0.2#ba60f1fbf42c06e7a2178ccc626bc1da52050e3b"
+source = "git+https://github.com/FreeSynergy/fs-components?rev=2bb3dfdd282ba4fc311931bb5385e6a06e68b89b#2bb3dfdd282ba4fc311931bb5385e6a06e68b89b"
 dependencies = [
  "blinc_cn",
  "blinc_core",
@@ -1609,7 +1659,7 @@ dependencies = [
 [[package]]
 name = "fs-components-render"
 version = "0.0.2"
-source = "git+https://github.com/FreeSynergy/fs-components?tag=v0.0.2#ba60f1fbf42c06e7a2178ccc626bc1da52050e3b"
+source = "git+https://github.com/FreeSynergy/fs-components?rev=2bb3dfdd282ba4fc311931bb5385e6a06e68b89b#2bb3dfdd282ba4fc311931bb5385e6a06e68b89b"
 dependencies = [
  "blinc_app",
  "blinc_cn",
@@ -1622,9 +1672,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-components-styles"
+version = "0.0.2"
+source = "git+https://github.com/FreeSynergy/fs-components?rev=2bb3dfdd282ba4fc311931bb5385e6a06e68b89b#2bb3dfdd282ba4fc311931bb5385e6a06e68b89b"
+
+[[package]]
 name = "fs-components-widgets"
 version = "0.0.2"
-source = "git+https://github.com/FreeSynergy/fs-components?tag=v0.0.2#ba60f1fbf42c06e7a2178ccc626bc1da52050e3b"
+source = "git+https://github.com/FreeSynergy/fs-components?rev=2bb3dfdd282ba4fc311931bb5385e6a06e68b89b#2bb3dfdd282ba4fc311931bb5385e6a06e68b89b"
 dependencies = [
  "blinc_cn",
  "blinc_core",
@@ -1635,21 +1690,6 @@ dependencies = [
  "fs-components-primitives",
  "image",
  "ttf-parser 0.24.1",
-]
-
-[[package]]
-name = "fs-components-workbenches"
-version = "0.0.2"
-source = "git+https://github.com/FreeSynergy/fs-components?tag=v0.0.2#ba60f1fbf42c06e7a2178ccc626bc1da52050e3b"
-dependencies = [
- "blinc_app",
- "blinc_cn",
- "blinc_core",
- "blinc_layout",
- "blinc_theme",
- "fs-components-primitives",
- "fs-components-render",
- "fs-components-widgets",
 ]
 
 [[package]]
@@ -1706,12 +1746,17 @@ name = "fs-maps-app"
 version = "0.0.3"
 dependencies = [
  "capnp",
+ "fs-admin-frontend",
  "fs-components-app",
- "fs-components-workbenches",
+ "fs-components-fields",
+ "fs-components-map",
+ "fs-components-styles",
+ "fs-components-widgets",
  "fs-interfaces 0.0.1 (git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.8)",
  "fs-maps-core",
  "fs-maps-server",
  "fs-objects",
+ "fs-types",
  "serde_json",
  "tempfile",
  "tokio",
@@ -1926,6 +1971,18 @@ checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "geo-types"
+version = "0.7.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "777d18aa0f12f8b285331cd867133ee14422b3f023f6d388034c47d43e28786a"
+dependencies = [
+ "approx",
+ "num-traits",
+ "serde",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3034,6 +3091,18 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
+]
+
+[[package]]
+name = "mvt-reader"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d59a9ba839816c282311c473b43eb9a0f4516afe3c2c0cb7cda68050c50ddcba"
+dependencies = [
+ "geo-types",
+ "num-traits",
+ "prost",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

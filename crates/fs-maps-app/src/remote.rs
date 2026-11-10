@@ -11,9 +11,10 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::thread;
 
-use fs_interfaces::common_capnp;
-use fs_interfaces::places_capnp::{place, places};
+use fs_interfaces::places_capnp::{place, place_page, places, tile_source};
+use fs_maps_core::describe::read_catalog;
 use fs_interfaces::rpc::{Problem, connect, read_envelope, write_uuid};
+use fs_types::TypeDescription;
 use uuid::Uuid;
 
 /// A place: its id, its name and its `GeoJSON` feature as the server keeps it.
@@ -65,6 +66,26 @@ pub trait PlacesApi: Send + Sync {
     /// # Errors
     /// [`ApiError`].
     fn delete(&self, id: &str) -> Result<(), ApiError>;
+    /// Places whose name contains `term`, in the server's order.
+    ///
+    /// # Errors
+    /// [`ApiError`].
+    fn find_by_name(&self, term: &str) -> Result<Vec<Place>, ApiError>;
+    /// Places whose bounding box meets the box `(west, south, east, north)` (`west > east` crosses 180).
+    ///
+    /// # Errors
+    /// [`ApiError`].
+    fn within(&self, area: (f64, f64, f64, f64)) -> Result<Vec<Place>, ApiError>;
+    /// The data types the program describes (`Places.types`).
+    ///
+    /// # Errors
+    /// [`ApiError`].
+    fn types(&self) -> Result<Vec<TypeDescription>, ApiError>;
+    /// One vector tile (uncompressed MVT); `None` = there is none.
+    ///
+    /// # Errors
+    /// [`ApiError`].
+    fn tile(&self, z: u8, x: u32, y: u32) -> Result<Option<Vec<u8>>, ApiError>;
 }
 
 type Job = Box<dyn FnOnce(Rc<places::Client>) -> Pin<Box<dyn Future<Output = ()>>> + Send>;
@@ -106,6 +127,28 @@ impl PlacesRemote {
         self.jobs.send(job).map_err(|_| gone())?;
         answer.recv().map_err(|_| gone())?
     }
+}
+
+/// All pages of a paged answer: `page` asks for the page at a cursor.
+async fn collect<F, Fut>(mut page: F) -> capnp::Result<Vec<Place>>
+where
+    F: FnMut(&[u8]) -> Fut,
+    Fut: Future<Output = capnp::Result<(Vec<Place>, Vec<u8>)>>,
+{
+    let (mut found, mut cursor) = (Vec::new(), Vec::<u8>::new());
+    loop {
+        let (items, next) = page(&cursor).await?;
+        found.extend(items);
+        if next.is_empty() {
+            return Ok(found);
+        }
+        cursor = next;
+    }
+}
+
+fn page_of(page: place_page::Reader<'_>) -> capnp::Result<(Vec<Place>, Vec<u8>)> {
+    let items = page.get_items()?.iter().map(read_place).collect::<capnp::Result<_>>()?;
+    Ok((items, page.get_next()?.get_opaque()?.to_vec()))
 }
 
 fn gone() -> ApiError {
@@ -181,27 +224,100 @@ fn read_place(p: place::Reader<'_>) -> capnp::Result<Place> {
 impl PlacesApi for PlacesRemote {
     fn list(&self) -> Result<Vec<Place>, ApiError> {
         self.run(|c| async move {
-            let (mut found, mut cursor) = (Vec::new(), Vec::<u8>::new());
-            loop {
+            collect(|cursor| {
                 let mut request = c.list_request();
-                request.get().init_cursor().set_opaque(&cursor);
-                let answer = request.send().promise.await.map_err(|e| problem(&e))?;
-                let page = answer
-                    .get()
-                    .and_then(places::list_results::Reader::get_page)
-                    .map_err(|e| problem(&e))?;
-                for p in page.get_items().map_err(|e| problem(&e))? {
-                    found.push(read_place(p).map_err(|e| problem(&e))?);
+                request.get().init_cursor().set_opaque(cursor);
+                async move {
+                    let answer = request.send().promise.await?;
+                    page_of(answer.get()?.get_page()?)
                 }
-                let next = page
-                    .get_next()
-                    .and_then(common_capnp::cursor::Reader::get_opaque)
-                    .map_err(|e| problem(&e))?;
-                if next.is_empty() {
-                    return Ok(found);
+            })
+            .await
+            .map_err(|e| problem(&e))
+        })
+    }
+
+    fn find_by_name(&self, term: &str) -> Result<Vec<Place>, ApiError> {
+        let term = term.to_string();
+        self.run(move |c| async move {
+            collect(|cursor| {
+                let mut request = c.find_by_name_request();
+                request.get().set_term(term.as_str());
+                request.get().init_cursor().set_opaque(cursor);
+                async move {
+                    let answer = request.send().promise.await?;
+                    page_of(answer.get()?.get_page()?)
                 }
-                cursor = next.to_vec();
+            })
+            .await
+            .map_err(|e| problem(&e))
+        })
+    }
+
+    fn within(&self, (west, south, east, north): (f64, f64, f64, f64)) -> Result<Vec<Place>, ApiError> {
+        self.run(move |c| async move {
+            collect(|cursor| {
+                let mut request = c.within_request();
+                {
+                    let mut b = request.get().init_box();
+                    b.set_west(west);
+                    b.set_south(south);
+                    b.set_east(east);
+                    b.set_north(north);
+                }
+                request.get().init_cursor().set_opaque(cursor);
+                async move {
+                    let answer = request.send().promise.await?;
+                    page_of(answer.get()?.get_page()?)
+                }
+            })
+            .await
+            .map_err(|e| problem(&e))
+        })
+    }
+
+    fn types(&self) -> Result<Vec<TypeDescription>, ApiError> {
+        self.run(|c| async move {
+            let catalog = c
+                .types_request()
+                .send()
+                .promise
+                .await
+                .and_then(|a| Ok(a.get()?.get_catalog()?))
+                .map_err(|e| problem(&e))?;
+            let answer = catalog
+                .describe_request()
+                .send()
+                .promise
+                .await
+                .map_err(|e| problem(&e))?;
+            answer
+                .get()
+                .and_then(|r| r.get_types())
+                .and_then(read_catalog)
+                .map_err(|e| problem(&e))
+        })
+    }
+
+    fn tile(&self, z: u8, x: u32, y: u32) -> Result<Option<Vec<u8>>, ApiError> {
+        self.run(move |c| async move {
+            let source: tile_source::Client = c
+                .tiles_request()
+                .send()
+                .promise
+                .await
+                .and_then(|a| Ok(a.get()?.get_source()?))
+                .map_err(|e| problem(&e))?;
+            let mut request = source.tile_request();
+            request.get().set_z(z);
+            request.get().set_x(x);
+            request.get().set_y(y);
+            let answer = request.send().promise.await.map_err(|e| problem(&e))?;
+            let r = answer.get().map_err(|e| problem(&e))?;
+            if !r.get_found() {
+                return Ok(None);
             }
+            Ok(Some(r.get_mvt().map_err(|e| problem(&e))?.to_vec()))
         })
     }
 

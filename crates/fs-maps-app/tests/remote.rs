@@ -1,4 +1,5 @@
-//! The window's adapter over the socket: `PlacesRemote` against a real server and a real store.
+//! The records and commands of the window over the socket: `PlacesBackend` and `PlacesRemote` against a real server
+//! and a real store.
 //!
 //! Pattern: Integration test — the server runs on its own thread and socket, the adapter is the one
 //! the window uses.
@@ -7,10 +8,9 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use fs_components_workbenches::ErrorKind;
-use fs_components_workbenches::people::{PeopleSource, PersonDraft};
+use fs_admin_frontend::{Backend, BackendError, Values};
 use fs_interfaces::rpc::{bind_socket, serve};
-use fs_maps_app::{PlacesAdapter, PlacesApi, PlacesRemote};
+use fs_maps_app::{PlacesApi, PlacesBackend, PlacesRemote};
 use fs_maps_core::StorePlaces;
 use fs_maps_server::MapsServer;
 use fs_objects::{Store, TursoStore};
@@ -39,143 +39,126 @@ fn start_server(socket: &Path) {
     started.recv().unwrap();
 }
 
-fn set(draft: &mut PersonDraft, key: &str, value: &str) {
-    draft
-        .groups
-        .iter_mut()
-        .flat_map(|g| g.fields.iter_mut())
-        .find(|f| f.key == key)
-        .unwrap()
-        .value = value.into();
-}
-
-fn shown(source: &PlacesAdapter, key: &str) -> String {
-    source
-        .read(key)
-        .unwrap()
-        .sections
+fn v(pairs: &[(&str, &[&str])]) -> Values {
+    pairs
         .iter()
-        .flat_map(|s| s.fields.iter().map(|f| format!("{}={}", f.label, f.value)))
-        .collect::<Vec<_>>()
-        .join(";")
+        .map(|(k, vs)| ((*k).to_owned(), vs.iter().map(|s| (*s).to_owned()).collect()))
+        .collect()
 }
 
-#[test]
-fn create_list_read_move_describe_delete_over_the_socket() {
+fn connect() -> (tempfile::TempDir, Arc<PlacesRemote>) {
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("maps.sock");
     start_server(&socket);
     let remote = Arc::new(PlacesRemote::connect(&socket).unwrap());
-    let adapter = PlacesAdapter::new(remote.clone());
-
-    let mut draft = adapter.blank().unwrap();
-    set(&mut draft, "name", "Brandenburg Gate");
-    set(&mut draft, "latitude", "52,5163");
-    set(&mut draft, "longitude", "13.3777");
-    let key = adapter.create(&draft).unwrap();
-
-    let rows = adapter.rows("", 0, 10).unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].cells, ["Brandenburg Gate", "52.51630, 13.37770"]);
-    assert_eq!(adapter.rows("gate", 0, 10).unwrap().len(), 1);
-    assert!(adapter.rows("zzz", 0, 10).unwrap().is_empty());
-    let sheet = shown(&adapter, &key);
-    assert!(sheet.contains("Geo URI=geo:52.5163,13.3777"), "{sheet}");
-
-    let mut edit = adapter.draft(&key).unwrap();
-    set(&mut edit, "latitude", "52.5");
-    set(&mut edit, "description", "A gate");
-    adapter.save(&key, &edit).unwrap();
-    let sheet = shown(&adapter, &key);
-    assert!(
-        sheet.contains("Latitude=52.5") && sheet.contains("Description=A gate"),
-        "{sheet}"
-    );
-
-    adapter.delete(&key).unwrap();
-    assert!(adapter.rows("", 0, 10).unwrap().is_empty());
-    assert_eq!(adapter.read(&key).unwrap_err().kind, ErrorKind::NotFound);
+    (dir, remote)
 }
 
 #[test]
-fn a_bad_position_or_a_missing_name_is_refused_with_a_sentence_before_the_server() {
-    let dir = tempfile::tempdir().unwrap();
-    let socket = dir.path().join("maps.sock");
-    start_server(&socket);
-    let adapter = PlacesAdapter::new(Arc::new(PlacesRemote::connect(&socket).unwrap()));
-    let mut draft = adapter.blank().unwrap();
-    assert!(adapter.create(&draft).unwrap_err().message.contains("name"));
-    set(&mut draft, "name", "Nowhere");
-    set(&mut draft, "latitude", "91");
-    set(&mut draft, "longitude", "0");
-    assert!(
-        adapter
-            .create(&draft)
-            .unwrap_err()
-            .message
-            .contains("latitude")
-    );
-    set(&mut draft, "latitude", "10");
-    set(&mut draft, "longitude", "abc");
-    assert!(
-        adapter
-            .create(&draft)
-            .unwrap_err()
-            .message
-            .contains("longitude")
-    );
-    assert!(adapter.rows("", 0, 10).unwrap().is_empty());
+fn the_description_comes_over_the_socket_with_every_type() {
+    let (_dir, remote) = connect();
+    let types = remote.types().unwrap();
+    let names: Vec<_> = types.iter().map(|t| t.name.as_str()).collect();
+    assert_eq!(names, ["MapLayer", "MapTour", "Place", "Region"]);
+}
+
+#[test]
+fn create_find_within_change_delete_over_the_socket() {
+    let (_dir, remote) = connect();
+    let backend = PlacesBackend::new(remote.clone(), "Place");
+    let told = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let t = told.clone();
+    backend.subscribe(Arc::new(move || {
+        t.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }));
+    let made = backend
+        .run("create", &v(&[("name", &["Bern"]), ("position", &["geo:46.948,7.447"]), ("keywords", &["capital", "swiss"])]))
+        .unwrap();
+    let id = made.id.unwrap();
+    backend.run("create", &v(&[("name", &["Wien"]), ("position", &["geo:48.2,16.37"])])).unwrap();
+    let all = backend.list(&Values::new()).unwrap();
+    assert_eq!(all.len(), 2);
+    let bern = all.iter().find(|r| r.id == id).unwrap();
+    assert_eq!(bern.values["name"], ["Bern"]);
+    assert_eq!(bern.values["keywords"], ["capital", "swiss"]);
+    assert!(bern.values["position"][0].starts_with("geo:46.948"));
+    // find by name
+    assert_eq!(backend.list(&v(&[("term", &["wie"])])).unwrap().len(), 1);
+    // within a box around Bern only
+    let boxed = v(&[("southwest", &["geo:46,7"]), ("northeast", &["geo:47,8"])]);
+    let inside = backend.list(&boxed).unwrap();
+    assert_eq!(inside.len(), 1);
+    assert_eq!(inside[0].id, id);
+    // change is partial: the description is added, the name and the keywords stay
+    backend.run("change", &v(&[("id", &[id.as_str()]), ("description", &["on the Aare"])])).unwrap();
+    let r = backend.list(&v(&[("term", &["bern"])])).unwrap().remove(0);
+    assert_eq!(r.values["description"], ["on the Aare"]);
+    assert_eq!(r.values["name"], ["Bern"]);
+    assert_eq!(r.values["keywords"], ["capital", "swiss"]);
+    // an empty list clears, a new value replaces
+    backend.run("change", &v(&[("id", &[id.as_str()]), ("keywords", &[]), ("position", &["geo:46.9,7.4"])])).unwrap();
+    let r = backend.list(&v(&[("term", &["bern"])])).unwrap().remove(0);
+    assert!(!r.values.contains_key("keywords"));
+    assert!(r.values["position"][0].starts_with("geo:46.9,7.4"));
+    backend.run("delete", &v(&[("id", &[id.as_str()])])).unwrap();
+    assert_eq!(backend.list(&Values::new()).unwrap().len(), 1);
+    assert_eq!(told.load(std::sync::atomic::Ordering::SeqCst), 5, "every write told its listener");
+}
+
+#[test]
+fn a_bad_position_or_a_missing_name_is_rejected_with_the_field() {
+    let (_dir, remote) = connect();
+    let backend = PlacesBackend::new(remote, "Place");
+    for input in [v(&[("name", &["x"]), ("position", &["not a place"])]), v(&[("name", &[" "])])] {
+        match backend.run("create", &input) {
+            Err(BackendError::Rejected(issues)) => assert_eq!(issues.len(), 1),
+            other => panic!("{other:?}"),
+        }
+    }
+    assert!(backend.list(&Values::new()).unwrap().is_empty());
+}
+
+#[test]
+fn commands_the_core_does_not_have_are_answered_unsupported_and_send_nothing() {
+    let (_dir, remote) = connect();
+    for (ty, cmd) in [("Place", "elevationProfile"), ("MapLayer", "create"), ("MapTour", "delete"), ("Region", "download")] {
+        let backend = PlacesBackend::new(remote.clone(), ty);
+        assert_eq!(
+            backend.run(cmd, &Values::new()),
+            Err(BackendError::Unavailable(format!("unsupported:{cmd}")))
+        );
+        assert!(backend.list(&Values::new()).unwrap().is_empty());
+    }
+    let places = PlacesBackend::new(remote.clone(), "Place");
+    assert!(places.list(&Values::new()).unwrap().is_empty(), "nothing was created");
+}
+
+#[test]
+fn a_shape_keeps_its_geometry_and_refuses_a_position() {
+    let (_dir, remote) = connect();
+    let line = r#"{"type":"Feature","properties":{"name":"Road","foreign":1},"geometry":{"type":"LineString","coordinates":[[7,46],[8,47]]}}"#;
+    let id = remote.create(line).unwrap().id;
+    let backend = PlacesBackend::new(remote.clone(), "Place");
+    let rec = backend.list(&Values::new()).unwrap().remove(0);
+    assert!(!rec.values.contains_key("position"));
+    assert!(matches!(
+        backend.run("change", &v(&[("id", &[id.as_str()]), ("position", &["geo:1,2"])])),
+        Err(BackendError::Rejected(_))
+    ));
+    backend.run("change", &v(&[("id", &[id.as_str()]), ("name", &["Road 2"])])).unwrap();
+    let kept = remote.get(&id).unwrap().unwrap().geojson;
+    assert!(kept.contains("LineString") && kept.contains("foreign"), "{kept}");
 }
 
 #[test]
 fn nothing_on_the_socket_is_said_plainly() {
     let dir = tempfile::tempdir().unwrap();
-    let message = PlacesRemote::connect(&dir.path().join("none.sock"))
-        .err()
-        .unwrap();
-    assert!(message.contains("fs-maps serve"), "{message}");
+    let e = PlacesRemote::connect(&dir.path().join("none.sock")).err().unwrap();
+    assert!(e.contains("no maps server"), "{e}");
 }
 
 #[test]
-fn a_stale_save_is_a_conflict_and_what_the_form_never_showed_is_kept() {
-    let dir = tempfile::tempdir().unwrap();
-    let socket = dir.path().join("maps.sock");
-    start_server(&socket);
-    let remote = Arc::new(PlacesRemote::connect(&socket).unwrap());
-    let adapter = PlacesAdapter::new(remote.clone());
-    let made = remote
-        .create(
-            r#"{"type":"Feature","bbox":[13,52,14,53],"geometry":{"type":"Point","coordinates":[13.4,52.5,34.0]},
-               "properties":{"name":"Spot","description":{"en":"a spot","de":"ein Ort"}}}"#,
-        )
-        .unwrap();
-
-    // Two windows open the same place; the second saves first.
-    let mut first = adapter.draft(&made.id).unwrap();
-    let mut second = adapter.draft(&made.id).unwrap();
-    set(&mut second, "name", "Spot B");
-    adapter.save(&made.id, &second).unwrap();
-    set(&mut first, "name", "Spot A");
-    let refused = adapter.save(&made.id, &first).unwrap_err();
-    assert_eq!(refused.kind, ErrorKind::Conflict, "{refused:?}");
-
-    // A rename leaves a description that is no plain text, the altitude and the box alone.
-    let kept: serde_json::Value =
-        serde_json::from_str(&remote.get(&made.id).unwrap().unwrap().geojson).unwrap();
-    assert_eq!(kept["properties"]["name"], "Spot B");
-    assert_eq!(kept["properties"]["description"]["de"], "ein Ort");
-    assert_eq!(kept["geometry"]["coordinates"][2], 34.0);
-    assert!(kept.get("bbox").is_some(), "{kept}");
-
-    // Moving the point drops the box (it would not contain it any more), the altitude stays.
-    let mut third = adapter.draft(&made.id).unwrap();
-    set(&mut third, "latitude", "10");
-    adapter.save(&made.id, &third).unwrap();
-    let moved: serde_json::Value =
-        serde_json::from_str(&remote.get(&made.id).unwrap().unwrap().geojson).unwrap();
-    assert_eq!(
-        moved["geometry"]["coordinates"],
-        serde_json::json!([13.4, 10.0, 34.0])
-    );
-    assert!(moved.get("bbox").is_none(), "{moved}");
+fn tiles_come_over_the_socket_as_not_available_when_no_map_is_configured() {
+    let (_dir, remote) = connect();
+    assert!(remote.tile(0, 0, 0).is_err());
 }

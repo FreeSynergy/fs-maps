@@ -12,3 +12,9 @@ rust-version = "1.89"
 
 # fs-types v0.0.2 (the version fs-admin-frontend uses) brings its own fs-interfaces v0.0.2; ours is the newer one with
 # `Places.types`. Both are in the build; the descriptions cross between them as plain values (`describe/wire.rs`).
+
+# Window resize crash (wgpu validation error when the window is enlarged), and the fast update path: restyle only the
+# nodes an incremental update replaced, no whole-tree layout-rule pass (Thread B). Pinned to commits (coding.md section 8).
+[patch.crates-io]
+blinc_app = { git = "https://github.com/FreeSynergy/blinc-app-fix", rev = "5180d4eae80034d851d98464861f098d69eceaf0" }
+blinc_layout = { git = "https://github.com/FreeSynergy/blinc-layout-fix", rev = "cb17db8111f2037473e6e02b6784628ca0dca151" }

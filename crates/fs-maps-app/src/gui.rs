@@ -1,19 +1,17 @@
 //! The window of `fs-maps` (ADR 0063): wiring only.
 //!
 //! Pattern: Facade consumer — connect to the server (starting it if none answers on the user's own
-//! socket), build the workbench, open the window or draw one picture.
+//! socket), build the window ([`crate::window::app`]), open it or draw one picture.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use fs_components_app::{
-    AppError, AppWidget, Element, Screen, Surface, WindowOptions, launch, parse_size,
-};
-use fs_components_workbenches::people::{PeopleSource, PeopleWidget};
+use fs_components_app::{WindowOptions, launch, parse_size};
 use fs_interfaces::rpc::default_socket;
 
-use crate::words::{TITLE, labels};
-use crate::{PlacesAdapter, PlacesRemote};
+use crate::PlacesApi;
+use crate::PlacesRemote;
+use crate::window::app;
 
 /// The help text.
 pub const HELP: &str = "fs-maps: the maps window (without arguments it opens)
@@ -22,28 +20,6 @@ pub const HELP: &str = "fs-maps: the maps window (without arguments it opens)
                      without it, a server is started if none answers; start it yourself with `fs-maps serve`
   --snapshot <png>   draw a picture instead of opening a window
   --size <WxH>       window or picture size (default 1200x800)";
-
-struct MapsScreen(PeopleWidget);
-
-impl Surface for MapsScreen {
-    fn build(&self, width: f32, height: f32) -> Box<dyn Element> {
-        Box::new(self.0.build(width, height))
-    }
-
-    fn styles(&self) -> String {
-        self.0.styles()
-    }
-}
-
-/// The shell around the workbench over `source`.
-///
-/// # Errors
-/// [`AppError`] if the shell cannot be made.
-pub fn app_widget(source: Arc<dyn PeopleSource>) -> Result<AppWidget, AppError> {
-    let widget = PeopleWidget::new(source, labels());
-    let screen = Screen::new("maps", TITLE, Arc::new(MapsScreen(widget)));
-    AppWidget::new(TITLE, vec![screen])
-}
 
 struct Args {
     socket: Option<PathBuf>,
@@ -93,9 +69,9 @@ pub fn run(words: &[String]) -> Result<(), String> {
         .or_else(|| default_socket("maps"))
         .ok_or("no socket: give --socket or set XDG_RUNTIME_DIR")?;
     let remote = connect_or_start(&socket, args.socket.is_none())?;
-    let adapter = PlacesAdapter::new(Arc::new(remote));
-    let app = app_widget(Arc::new(adapter)).map_err(|e| e.to_string())?;
     let (width, height) = args.size;
+    let api: Arc<dyn PlacesApi> = Arc::new(remote);
+    let app = app(&api, f64::from(width), f64::from(height))?;
     if let Some(file) = &args.snapshot {
         app.picture(width, height, file)
             .map_err(|e| e.to_string())?;
