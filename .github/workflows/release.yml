@@ -6,6 +6,10 @@ permissions:
   id-token: write
   attestations: write
   packages: write
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: false
+
 jobs:
   release:
     uses: FreeSynergy/fs-release/.github/workflows/release.yml@main
